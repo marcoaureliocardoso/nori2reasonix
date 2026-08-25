@@ -70,12 +70,15 @@ export function transform(input: ParsedNoriInput): TransformResult {
   const subagents: ReasonixSubagent[] = input.subagents.map((agent) => {
     const { allowedTools, toolWarnings } = mapTools(agent);
     for (const warning of toolWarnings) warnings.push(warning);
+    const description =
+      typeof agent.frontmatter.description === "string"
+        ? agent.frontmatter.description
+        : typeof agent.json?.description === "string"
+          ? agent.json.description
+          : agent.name;
     return {
       name: agent.name,
-      description:
-        typeof agent.frontmatter.description === "string"
-          ? agent.frontmatter.description
-          : undefined,
+      description,
       runAs: "subagent",
       allowedTools,
       body: agent.body,

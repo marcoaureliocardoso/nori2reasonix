@@ -30,6 +30,16 @@ describe("transform", () => {
     expect(agent?.allowedTools).toEqual(["read_file", "grep", "glob"]);
   });
 
+  it("uses the subagent nori.json description when frontmatter lacks one", () => {
+    const input = parseNoriInput(readFixture("skillset"));
+    const result = transform(input);
+    // packaged-agent has no frontmatter description; its nori.json does.
+    const agent = result.subagents.find((a) => a.name === "packaged-agent");
+    expect(agent?.description).toBe(
+      "Packaged agent description from its manifest."
+    );
+  });
+
   it("warns but does not drop a tool name with no mapping", () => {
     const input = parseNoriInput(readFixture("skillset"));
     // Inject an unmapped tool into the subagent's frontmatter.
