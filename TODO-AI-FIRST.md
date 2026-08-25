@@ -30,7 +30,9 @@
 
 - `CONCLUÍDO` — Scaffold do converter (`package.json`, `tsconfig.json`, `bin/nori2reasonix`, vitest), conforme plano aprovado.
 - `CONCLUÍDO` — Verificar a seção `## Commands` do `AGENTS.md` contra o scaffold real após criá-lo.
-- `EM ANDAMENTO` — Implementar os módulos do conversor. `manifest`, `transform`, `emit-workspace`, `emit-plugin`, `cli` e `template` **concluídos** (TDD, 47 testes, validados contra `~/.nori/profiles/public/senior-swe` real; I/O **síncrono** decidido em conjunto). `bin/nori2reasonix --help` e `--input/--output/--target` funcionais. `template`: placeholder resolver (`$ARGUMENTS`/`$1..$N`) + agent-conditional como no-op explícito (a fonte Nori não documenta sintaxe inline; extras por agente ficam em `agents/<name>.yaml` e geram warning). Fontes canônicas do Reasonix registradas no `AGENTS.md` (docs `PLUGIN_PACKAGES.md`/`SPEC.md`/`GUIDE.md`/`TOOL_CONTRACT.md` + skill `reasonix-guide`).
+- `CONCLUÍDO` — Implementação dos módulos do conversor. `manifest`, `transform`, `emit-workspace`, `emit-plugin`, `cli` e `template` **concluídos** (TDD, 47 testes, validados contra `~/.nori/profiles/public/senior-swe` real; I/O **síncrono** decidido em conjunto). `bin/nori2reasonix --help` e `--input/--output/--target` funcionais. `template`: placeholder resolver (`$ARGUMENTS`/`$1..$N`) + agent-conditional como no-op explícito (a fonte Nori não documenta sintaxe inline; extras por agente ficam em `agents/<name>.yaml` e geram warning). Fontes canônicas do Reasonix registradas no `AGENTS.md` (docs `PLUGIN_PACKAGES.md`/`SPEC.md`/`GUIDE.md`/`TOOL_CONTRACT.md` + skill `reasonix-guide`).
+- `CONCLUÍDO` — `git init` + primeiro commit (`2b55a0b`, branch `main`, 46 arquivos).
+- `CONCLUÍDO` — Validação `reasonix doctor capabilities --json` sobre workspace emitido: raiz `.reasonix/skills` com `status: ok`, skills descobertas (summary skills=70, commands=21, errors=0), `REASONIX.md` carregado como instrução (order 2). 1 warning remanescente é de skill count do plugin Superpowers instalado, não da emissão.
 
 ## Notas da sessão
 
