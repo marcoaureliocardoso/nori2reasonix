@@ -41,6 +41,20 @@ function readSourceSide(noriJsonPath: string): SourceSide {
       skills[name] = { hash: `missing:${name}` };
     }
   }
+
+  // Expected non-skill artifacts: REASONIX.md (from AGENTS.md/CLAUDE.md) and
+  // the .reasonix/settings.json hooks block. These mirror what the converter
+  // emits, so the doctor can flag drift in them too.
+  const root = path.dirname(noriJsonPath);
+  for (const rel of ["AGENTS.md", "CLAUDE.md"]) {
+    const p = path.join(root, rel);
+    if (existsSync(p)) {
+      skills["artifact:REASONIX.md"] = {
+        hash: sha256(readFileSync(p, "utf8")),
+      };
+      break;
+    }
+  }
   return { skills };
 }
 
@@ -67,6 +81,25 @@ function readTargetSide(workspace: string, exec: Executor): TargetSide {
     }
     skills.set(entry.name, { path: file, hash });
   }
+
+  // Artifacts (settings.json hooks, REASONIX.md, sidecars) are tracked via the
+  // ownership manifest rather than the Reasonix skill index.
+  const ownershipPath = path.join(workspace, ".nori2reasonix.json");
+  try {
+    const manifest = JSON.parse(readFileSync(ownershipPath, "utf8")) as {
+      files?: Record<string, string>;
+    };
+    for (const [rel, hash] of Object.entries(manifest.files ?? {})) {
+      if (rel.endsWith("/SKILL.md")) continue; // already covered as a skill
+      skills.set(`artifact:${rel}`, {
+        path: path.join(workspace, rel),
+        hash,
+      });
+    }
+  } catch {
+    // no ownership manifest — only skills are compared
+  }
+
   return { skills };
 }
 
