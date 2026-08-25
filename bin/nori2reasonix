@@ -40,13 +40,16 @@ if (options.help) {
 } else if (options.sync) {
   const report = runDoctor({ workspace: process.cwd() });
   const actions = planSync(report.entries);
+  const sourceSkillDir =
+    report.source.noriJsonPath !== undefined &&
+    report.source.noriJsonPath !== ""
+      ? report.source.noriJsonPath.replace(/nori\.json$/, "skills")
+      : undefined;
   const result = executeSync(actions, {
     output: options.output || process.cwd(),
     yes: options.yes,
     force: options.force,
-    sourceSkillDir: report.source.noriJsonPath
-      ? report.source.noriJsonPath.replace(/nori\.json$/, "skills")
-      : undefined,
+    sourceSkillDir,
   });
 
   console.log(JSON.stringify(result, null, 2));

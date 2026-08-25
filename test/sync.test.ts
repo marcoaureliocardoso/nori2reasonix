@@ -1,5 +1,6 @@
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { planSync, type SyncAction } from "../src/sync/plan.ts";
@@ -86,5 +87,66 @@ describe("executeSync", () => {
     const backups = result.backupPaths;
     expect(backups.length).toBe(1);
     expect(readFileSync(backups[0]!, "utf8")).toBe("old content");
+  });
+
+  it("skips re-emitting a drifted file that is not ours, unless --force", () => {
+    const sourceSkillDir = path.join(dir, "src-skills");
+    const sourceSkill = path.join(sourceSkillDir, "drifted");
+    mkdirSync(sourceSkill, { recursive: true });
+    writeFileSync(path.join(sourceSkill, "SKILL.md"), "new content");
+
+    // A user file (not owned) already exists at the target.
+    mkdirSync(path.dirname(targetPath("drifted")), { recursive: true });
+    writeFileSync(targetPath("drifted"), "user edited content");
+
+    const action: SyncAction = { skill: "drifted", action: "re-emit" };
+
+    // Without --force: skip (never overwrite a non-owned file).
+    const noForce = executeSync([action], {
+      output: dir,
+      yes: true,
+      sourceSkillDir,
+    });
+    expect(noForce.skipped.length).toBeGreaterThan(0);
+    expect(readFileSync(targetPath("drifted"), "utf8")).toBe("user edited content");
+
+    // With --force: overwrite (user assumes max risk).
+    const force = executeSync([action], {
+      output: dir,
+      yes: true,
+      force: true,
+      sourceSkillDir,
+    });
+    expect(force.skipped).toEqual([]);
+    expect(readFileSync(targetPath("drifted"), "utf8")).toBe("new content");
+  });
+
+  it("still re-emits a drifted file we own (from .nori2reasonix.json)", () => {
+    const sourceSkillDir = path.join(dir, "src-skills");
+    mkdirSync(path.join(sourceSkillDir, "drifted-owned"), { recursive: true });
+    writeFileSync(path.join(sourceSkillDir, "drifted-owned", "SKILL.md"), "new content");
+
+    // Place a target that a PREVIOUS converter run owned: the ownership
+    // file records the hash of the current content.
+    const target = targetPath("drifted-owned");
+    mkdirSync(path.dirname(target), { recursive: true });
+    writeFileSync(target, "previous content");
+    const currentHash = createHash("sha256")
+      .update("previous content")
+      .digest("hex");
+    writeFileSync(
+      path.join(dir, ".nori2reasonix.json"),
+      JSON.stringify({
+        version: 1,
+        files: { ".reasonix/skills/drifted-owned/SKILL.md": currentHash },
+      })
+    );
+
+    const result = executeSync(
+      [{ skill: "drifted-owned", action: "re-emit" }],
+      { output: dir, yes: true, sourceSkillDir }
+    );
+    expect(result.skipped).toEqual([]);
+    expect(readFileSync(target, "utf8")).toBe("new content");
   });
 });

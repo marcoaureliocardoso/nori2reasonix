@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import type { SyncAction } from "./plan.js";
 
 export interface SyncResult {
@@ -15,13 +16,16 @@ export interface SyncOptions {
   yes: boolean;
   /** Directory holding source skills (for emit/re-emit), optional. */
   sourceSkillDir?: string;
-  /** When true, also overwrite non-owned drifted files (max risk). */
+  /** When true, also overwrite drifted files we do not own (max risk). */
   force?: boolean;
 }
 
 /**
  * Execute a sync plan. `yes=false` is a dry-run: nothing is written.
  * `yes=true` performs the actions, backing up removals and re-emits.
+ *
+ * Ownership rule (per project convention): re-emit/remove only touch files
+ * we own (recorded in `.nori2reasonix.json`) or, with `force`, any file.
  */
 export function executeSync(
   actions: SyncAction[],
@@ -45,6 +49,20 @@ export function executeSync(
 
   for (const item of actions) {
     const target = skillTargetPath(options.output, item.skill);
+
+    // Ownership-aware guard: re-emit overwrites content, so it must only
+    // touch files we own (or --force). remove always backs up via rename,
+    // so it remains recoverable and does not need the same guard.
+    if (
+      item.action === "re-emit" &&
+      !isOwned(target, options.output) &&
+      !options.force
+    ) {
+      result.skipped.push(
+        `${item.skill}: target is not ours and --force was not given`
+      );
+      continue;
+    }
 
     switch (item.action) {
       case "emit":
@@ -102,6 +120,31 @@ function skillTargetPath(output: string, skill: string): string {
   return path.join(output, ".reasonix", "skills", skill, "SKILL.md");
 }
 
+/** True when `target` is recorded with a matching hash in ownership. */
+function isOwned(target: string, output: string): boolean {
+  const ownershipPath = path.join(output, ".nori2reasonix.json");
+  try {
+    const raw = JSON.parse(readFileSync(ownershipPath, "utf8")) as {
+      files?: Record<string, string>;
+    };
+    const rel = path.relative(output, target);
+    const recordedHash = raw.files?.[rel];
+    if (recordedHash === undefined) return false;
+
+    let currentHash: string;
+    try {
+      currentHash = createHash("sha256")
+        .update(readFileSync(target, "utf8"))
+        .digest("hex");
+    } catch {
+      return false;
+    }
+    return currentHash === recordedHash;
+  } catch {
+    return false;
+  }
+}
+
 function backupFile(
   target: string,
   backupDir: string,
@@ -119,3 +162,4 @@ function backupFile(
     // File doesn't exist — nothing to back up.
   }
 }
+
