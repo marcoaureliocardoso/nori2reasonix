@@ -106,6 +106,18 @@ describe("transform", () => {
     expect(result.warnings).toEqual([]);
   });
 
+  it("maps subagent role hooks into Reasonix events and renames matcher to match", () => {
+    const input = parseNoriInput(readFixture("skillset"));
+    const result = transform(input);
+    const hooks = result.hooks as Record<string, unknown[]>;
+    const pre = hooks["PreToolUse"] as Array<Record<string, unknown>>;
+    expect(pre?.length).toBeGreaterThan(0);
+    expect(pre?.[0]?.match).toBe("bash|Bash");
+    expect(String(pre?.[0]?.command)).toContain("command-guard-launcher.sh");
+    expect(String(pre?.[0]?.command)).not.toContain("{{skills_dir}}");
+    expect(pre?.[0]?.timeout).toBe(7);
+  });
+
   it("slugs skill names and preserves the original title as description", () => {
     const input = parseNoriInput(readFixture("skillset"));
     // One space-titled skill at runtime (no extra fixture file needed).

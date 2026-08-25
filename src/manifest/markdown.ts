@@ -92,3 +92,121 @@ export function parseSubagentFrontmatter(block: string): Frontmatter {
 
   return fm;
 }
+
+/**
+ * Parse a raw `hooks:` block (Claude Code subagent format) into
+ * `{ [event]: [entry, ...] }` where each entry carries `matcher` (when
+ * present) and a `hooks` array of `{ type, command, args[], timeout }`
+ * command objects. Unparsed fragments are skipped, never dropped silently —
+ * transform reports a warning when a block yields no command entries.
+ */
+export function parseHooksBlock(block: string): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const rawLines = block.split("\n");
+
+  // The flat frontmatter parser preserves nested blocks WITH their original
+  // indentation. Normalize by stripping the minimum indentation so the first
+  // event key sits at column 0 and everything else is relative to it.
+  const nonEmpty = rawLines.filter((l) => l.trim() !== "");
+  const minIndent = nonEmpty.reduce(
+    (acc, l) => Math.min(acc, l.length - l.trimStart().length),
+    Number.POSITIVE_INFINITY
+  );
+  const lines = nonEmpty.map((l) => ({
+    text: l.trim(),
+    indent: l.length - l.trimStart().length - minIndent,
+  }));
+
+  let event: string | null = null;
+  let entry: Record<string, unknown> | null = null;
+  let cmd: Record<string, unknown> | null = null;
+
+  for (const { text, indent } of lines) {
+    // Event key at column 0: `PreToolUse:`.
+    if (indent === 0 && /^[A-Za-z][A-Za-z0-9_]*:$/.test(text)) {
+      event = text.slice(0, -1);
+      entry = null;
+      cmd = null;
+      out[event] = [];
+      continue;
+    }
+    if (event === null) continue;
+
+    // Entry dash item at indent 2: `- matcher: Bash` or `- hooks:`.
+    if (indent === 2 && /^- /.test(text)) {
+      const m = /^- (\w[\w-]*):\s*(.*)$/.exec(text);
+      if (m !== null) {
+        const key = m[1] ?? "";
+        const val = trimQuotes(m[2] ?? "");
+        if (key === "hooks") {
+          entry = entry ?? {};
+          entry["hooks"] = [];
+          (out[event] as unknown[]).push(entry);
+          cmd = null;
+        } else {
+          entry = { [key]: val };
+          (out[event] as unknown[]).push(entry);
+          cmd = null;
+        }
+      }
+      continue;
+    }
+
+    // Plain `hooks:` that opens the nested command list (no other key does).
+    if (indent >= 4 && /^hooks:$/.test(text) && entry !== null) {
+      entry["hooks"] = [];
+      cmd = null;
+      continue;
+    }
+
+    // Dash item at deeper indent: `- type: command` starts a command object.
+    if (indent >= 4 && /^- /.test(text) && entry !== null) {
+      const m = /^- (\w[\w-]*):\s*(.*)$/.exec(text);
+      if (m === null) {
+        // `- pre` continues the current command's args list.
+        if (cmd !== null && Array.isArray(cmd["args"])) {
+          (cmd["args"] as unknown[]).push(text.slice(2));
+        }
+        continue;
+      }
+      const key = m[1] ?? "";
+      const val = trimQuotes(m[2] ?? "");
+      cmd = {};
+      entry["hooks"] = entry["hooks"] ?? [];
+      (entry["hooks"] as unknown[]).push(cmd);
+      if (key === "args") {
+        cmd["args"] = [];
+      } else {
+        cmd[key] = val;
+      }
+      continue;
+    }
+
+    // Plain `key: value` at deeper indent continues the current command.
+    if (indent >= 4 && cmd !== null) {
+      const m = /^(\w[\w-]*):\s*(.*)$/.exec(text);
+      if (m === null) continue;
+      const key = m[1] ?? "";
+      const val = trimQuotes(m[2] ?? "");
+      if (key === "args") {
+        cmd["args"] = [];
+      } else {
+        cmd[key] = val;
+      }
+      continue;
+    }
+  }
+
+  return out;
+}
+
+function trimQuotes(value: string): string {
+  const v = value.trim();
+  if (
+    (v.startsWith('"') && v.endsWith('"')) ||
+    (v.startsWith("'") && v.endsWith("'"))
+  ) {
+    return v.slice(1, -1);
+  }
+  return v;
+}

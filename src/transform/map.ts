@@ -5,7 +5,12 @@ import type {
   NoriSubagent,
 } from "../manifest/types.js";
 import { resolvePlaceholders } from "../template/placeholders.js";
-import { FIELD_MAP, TOOL_NAME_MAP, slugify } from "./table.js";
+import {
+  FIELD_MAP,
+  HOOK_UNMAPPED_FIELDS,
+  TOOL_NAME_MAP,
+  slugify,
+} from "./table.js";
 
 /** A Reasonix-native skill: frontmatter + body (same shape Nori uses). */
 export interface ReasonixSkill {
@@ -103,7 +108,7 @@ export function transform(input: ParsedNoriInput): TransformResult {
     mapCommand(cmd, warnings)
   );
 
-  const hooks: ReasonixHooks = mapHooks();
+  const hooks: ReasonixHooks = mapHooks(subagents, warnings);
 
   return {
     name: input.name,
@@ -239,13 +244,146 @@ function mapCommand(
   };
 }
 
-function mapHooks(): ReasonixHooks {
-  // Hooks arriving in Nori skillsets are rare; this module maps none until a
-  // fixture with hooks exists. The FIELD_MAP hook row documents the intended
-  // matcher→match translation for the emit module.
-  return {};
+function mapHooks(
+  agents: ReasonixSubagent[],
+  warnings: TransformWarning[]
+): ReasonixHooks {
+  const events = new Map<string, unknown[]>();
+
+  for (const agent of agents) {
+    for (const [eventNameRaw, hookListRaw] of Object.entries(agent.roleHooks)) {
+      const eventName = mapEventName(eventNameRaw);
+      // roleHooks entries come from parseHooksBlock: an array of objects like
+      // { matcher, hooks: [ {type, command, args, timeout} ] }.
+      const entries = Array.isArray(hookListRaw) ? hookListRaw : [hookListRaw];
+
+      for (const rawEntry of entries) {
+        if (rawEntry === null || typeof rawEntry !== "object") continue;
+        const entry = rawEntry as Record<string, unknown>;
+
+        const matcher = entry["matcher"];
+        const commandHooks = entry["hooks"];
+
+        // A matcher entry with a nested hooks array.
+        const cmdList: unknown[] = Array.isArray(commandHooks)
+          ? commandHooks
+          : [];
+
+        if (cmdList.length === 0 && entry["command"] !== undefined) {
+          // Inline command form: { command, args, timeout }.
+          cmdList.push(entry);
+        }
+
+        for (const cmdRaw of cmdList) {
+          if (cmdRaw === null || typeof cmdRaw !== "object") continue;
+          const cmd = cmdRaw as Record<string, unknown>;
+
+          const mapped: Record<string, unknown> = {};
+          if (matcher !== undefined) {
+            mapped["match"] = anchorToolPattern(String(matcher));
+          }
+
+          const cmdStr = cmd["command"];
+          if (typeof cmdStr === "string") {
+            const resolved = resolveHookTemplate(cmdStr, agent.name);
+            const args = Array.isArray(cmd["args"])
+              ? cmd["args"].map(String)
+              : [];
+            mapped["command"] =
+              args.length > 0 ? `${resolved} ${args.join(" ")}` : resolved;
+          } else {
+            warnings.push({
+              entity: agent.name,
+              field: "hooks",
+              detail: `hook entry under ${eventName} has no command — dropped from settings.json`,
+            });
+            continue;
+          }
+
+          mapped["timeout"] =
+            typeof cmd["timeout"] === "number"
+              ? cmd["timeout"]
+              : typeof cmd["timeout"] === "string" &&
+                  /^\d+$/.test(String(cmd["timeout"]))
+                ? parseInt(String(cmd["timeout"]), 10)
+                : eventName === "PreToolUse" || eventName === "UserPromptSubmit"
+                  ? 5000
+                  : 30000;
+
+          events.set(eventName, [...(events.get(eventName) ?? []), mapped]);
+        }
+      }
+    }
+  }
+
+  // Warn once per unmapped hook field category so a single hook cannot flood.
+  for (const agent of agents) {
+    for (const field of HOOK_UNMAPPED_FIELDS) {
+      const found =
+        typeof agent.roleHooks === "object" && agent.roleHooks !== null
+          ? JSON.stringify(agent.roleHooks).includes(`"${field}"`)
+          : false;
+      if (found) {
+        warnings.push({
+          entity: agent.name,
+          field: "hooks",
+          detail: `hook field "${field}" has no Reasonix equivalent (dropped from settings.json)`,
+        });
+      }
+    }
+  }
+
+  const out: ReasonixHooks = {};
+  for (const [k, v] of events) out[k] = v;
+  void FIELD_MAP; // keep the central mapping table referenced
+  return out;
 }
 
-// Keep FIELD_MAP referenced so table.ts is not dead code and the central
-// mapping table stays the single source for hook field translation.
-void FIELD_MAP;
+/** `{{skills_dir}}` points at the skillset skills/ root; after conversion the
+ * command is written relative to the emit root, so collapse it to `.`. */
+function resolveHookTemplate(command: string, skillDir: string): string {
+  let out = command;
+  out = out.replace(/\{\{\s*skill_dir\s*\}\}/g, skillDir);
+  out = out.replace(/\{\{\s*skills_dir\s*\}\}/g, ".");
+  return out;
+}
+
+/** Reasonix knows 11 events; normalize Nori/Claude spellings to PascalCase. */
+function mapEventName(name: string): string {
+  const known = new Set([
+    "PreToolUse",
+    "PostToolUse",
+    "PreCompact",
+    "PostCompact",
+    "PermissionRequest",
+    "UserPromptSubmit",
+    "Stop",
+    "PostLLMCall",
+    "SessionStart",
+    "SessionEnd",
+    "SubagentStop",
+    "Notification",
+  ]);
+  if (known.has(name)) return name;
+  const pascal = name.replace(
+    /[-_ ]+(.)/g,
+    (_, c: string) => c.toUpperCase()
+  );
+  // Ensure the first letter is uppercase (handle e.g. "pre-tool-use").
+  const title = pascal.charAt(0).toUpperCase() + pascal.slice(1);
+  return known.has(title) ? title : name;
+}
+
+/** Reasonix `match` is an anchored regex; Nori matchers like "Bash" are tool
+ * names, so mirror the lowercase builtin form too. */
+function anchorToolPattern(pattern: string): string {
+  if (pattern === "" || pattern === "*") return "*";
+  return pattern
+    .split("|")
+    .map((p) => {
+      const t = p.trim();
+      return t === "Bash" ? "bash|Bash" : t;
+    })
+    .join("|")
+    .replace(/\*/g, ".*");
+}

@@ -1,7 +1,7 @@
 import path from "node:path";
 import { discoverSkillset, nodeFs } from "./discovery.js";
 import { NoriError } from "./errors.js";
-import { parseMarkdown } from "./markdown.js";
+import { parseHooksBlock, parseMarkdown } from "./markdown.js";
 import type {
   DiscoveryResult,
   Frontmatter,
@@ -218,12 +218,14 @@ function readFrontmatterList(fm: Frontmatter, key: string): string[] {
 }
 
 /**
- * The `hooks:` block arrives either as a parsed object (flat parser handles
- * only one nesting level via the raw-joined string) or as a raw string. We
- * keep the raw string form verbatim here; transform maps it later.
+ * The `hooks:` block arrives either as a parsed object or as a raw string
+ * (Claude Code subagent format). Use the shared block parser for strings.
  */
 function readHooksBlock(fm: Frontmatter): NormalizedSubagentHooks {
   const raw: unknown = fm["hooks"];
+  if (typeof raw === "string") {
+    return parseHooksBlock(raw) as unknown as NormalizedSubagentHooks;
+  }
   if (raw !== null && typeof raw === "object" && !Array.isArray(raw)) {
     return raw as NormalizedSubagentHooks;
   }

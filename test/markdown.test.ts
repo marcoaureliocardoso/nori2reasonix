@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  parseHooksBlock,
   parseMarkdown,
   parseSubagentFrontmatter,
 } from "../src/manifest/markdown.ts";
@@ -67,5 +68,31 @@ describe("parseSubagentFrontmatter", () => {
       "hooks:\n  PreToolUse:\n    - matcher: Bash\n    - command: bin/guard"
     );
     expect(typeof fm.hooks).toBe("string");
+  });
+});
+
+describe("parseHooksBlock", () => {
+  it("parses the Claude subagent hooks schema into events with commands", () => {
+    const block = [
+      "PreToolUse:",
+      "  - matcher: Bash",
+      "    hooks:",
+      "      - type: command",
+      '        command: "{{skills_dir}}/command-driven-operations/scripts/command-guard-launcher.sh"',
+      "        args:",
+      "          - pre",
+      "        timeout: 7",
+    ].join("\n");
+    const out = parseHooksBlock(block) as Record<string, unknown>;
+    expect(Object.keys(out)).toEqual(["PreToolUse"]);
+    const entries = out["PreToolUse"] as unknown[];
+    const entry = entries[0] as Record<string, unknown>;
+    expect(entry["matcher"]).toBe("Bash");
+    const hooks = entry["hooks"] as unknown[];
+    const cmd = hooks[0] as Record<string, unknown>;
+    expect(cmd["type"]).toBe("command");
+    expect(cmd["command"]).toContain("command-guard-launcher.sh");
+    expect(cmd["args"]).toEqual(["pre"]);
+    expect(cmd["timeout"]).toBe("7");
   });
 });

@@ -39,9 +39,13 @@ describe("planWorkspace", () => {
     expect(skill?.content).toContain("# Brainstorming");
   });
 
-  it("does not emit an empty settings.json when there are no hooks", () => {
+  it("emits .reasonix/settings.json with mapped hooks when present", () => {
     const plan = planWorkspace(dir, fixtureResult());
-    expect(plan.some((f) => f.path.endsWith("settings.json"))).toBe(false);
+    const settings = plan.find((f) => f.path.endsWith("settings.json"));
+    expect(settings).toBeDefined();
+    expect(settings?.content).toContain('"PreToolUse"');
+    expect(settings?.content).toContain('"PreCompact"');
+    expect(settings?.content).toContain('"match"');
   });
 
   it("preserves ${VAR} literals in .mcp.json", () => {

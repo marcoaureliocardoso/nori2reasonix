@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
-import { parseMarkdown } from "./markdown.js";
+import { parseHooksBlock, parseMarkdown } from "./markdown.js";
 import type {
   DiscoveryResult,
   Frontmatter,
@@ -107,13 +107,18 @@ function pushSubagentFile(
     fs
   );
   const skills = readFrontmatterList(doc.frontmatter, "skills");
-  const hooks: NormalizedSubagentHooks = {};
+  let hooks: NormalizedSubagentHooks = {};
   const hooksRaw = doc.frontmatter.hooks;
-  if (hooksRaw !== null && typeof hooksRaw === "object" && !Array.isArray(hooksRaw)) {
-    // Object form already (future parsers); carry verbatim.
-    Object.assign(hooks, hooksRaw as NormalizedSubagentHooks);
+  if (typeof hooksRaw === "string") {
+    hooks = parseHooksBlock(hooksRaw) as unknown as NormalizedSubagentHooks;
+  } else if (
+    hooksRaw !== null &&
+    typeof hooksRaw === "object" &&
+    !Array.isArray(hooksRaw)
+  ) {
+    hooks = hooksRaw as NormalizedSubagentHooks;
   }
-  // String form (`_raw`) is preserved on the frontmatter for transform to map.
+  // Any other form (`_raw` strings etc.) stays empty; transform warns.
 
   out.push({
     name: String(doc.frontmatter.name),

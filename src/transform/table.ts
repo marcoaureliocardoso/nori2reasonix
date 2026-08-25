@@ -72,3 +72,41 @@ export const FIELD_MAP: ReadonlyArray<MappingRule> = [
   // Instructions: content passthrough as REASONIX.md.
   { kind: "instructions", fields: [] },
 ];
+
+/**
+ * Nori/Claude hook fields with no Reasonix equivalent — always warn, never
+ * drop. `matcher` is NOT here: it is renamed to `match` (see FIELD_MAP hooks
+ * row), not discarded.
+ */
+export const HOOK_UNMAPPED_FIELDS: ReadonlyArray<string> = [
+  "permissionDecision",
+  "updatedInput",
+  "hookSpecificOutput",
+];
+
+/**
+ * The `ask` action of the native command guard has NO hook equivalent in
+ * Reasonix (hooks only allow-or-block via exit 2). Recorded policy: deny.
+ */
+export const NORMALIZED_POLICY = {
+  ACTION: "ask-or-denied-reformulate",
+  ALLOW_KINDS: new Set(["allow", "safe_read_only", "low_risk_change"]),
+} as const;
+
+/** A normalized `KEY=value` guard rule line. */
+export interface NormalizedRule {
+  key: string;
+  value: string;
+}
+
+/** Parse the guard's rendered rule block (`ACTION=…` lines) into key/value pairs. */
+export function normalizeGuardRules(rendered: string): NormalizedRule[] {
+  return rendered
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => /^\w+(\.\w+)*=/.test(l))
+    .map((l) => {
+      const i = l.indexOf("=");
+      return { key: l.slice(0, i), value: l.slice(i + 1) };
+    });
+}
