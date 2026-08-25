@@ -64,3 +64,31 @@ function parseFrontmatter(block: string): Frontmatter {
 
   return result;
 }
+
+/**
+ * Parse the frontmatter of a Nori subagent definition.
+ *
+ * Extended beyond `parseFrontmatter` for SUBAGENT.md documents, which carry
+ * nested `skills:` lists that the flat parser would otherwise join into raw
+ * strings. Scalar/comma-list handling is shared with `parseFrontmatter`;
+ * only the nested-list interpretation differs. Anything else (e.g. a nested
+ * `hooks:` block) is preserved as a raw string, never dropped.
+ */
+export function parseSubagentFrontmatter(block: string): Frontmatter {
+  const fm = parseFrontmatter(block);
+
+  // A `skills:` list is indented `- value` lines captured as a raw string.
+  const skills = fm["skills"];
+  if (typeof skills === "string") {
+    const items = skills
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.startsWith("- "))
+      .map((l) => l.slice(2).trim());
+    if (items.length > 0 && items.length === skills.split("\n").length) {
+      fm["skills"] = items;
+    }
+  }
+
+  return fm;
+}

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { parseMarkdown } from "../src/manifest/markdown.ts";
+import {
+  parseMarkdown,
+  parseSubagentFrontmatter,
+} from "../src/manifest/markdown.ts";
 
 describe("parseMarkdown", () => {
   it("returns empty frontmatter and full body when there is no frontmatter", () => {
@@ -38,5 +41,31 @@ describe("parseMarkdown", () => {
     const result = parseMarkdown(raw);
     expect(result.frontmatter).toEqual({ name: "x" });
     expect(result.body).toBe("");
+  });
+});
+
+describe("parseSubagentFrontmatter", () => {
+  it("parses flat fields and comma lists", () => {
+    expect(
+      parseSubagentFrontmatter("name: reviewer\ntools: Read, Grep, Bash")
+    ).toEqual({ name: "reviewer", tools: ["Read", "Grep", "Bash"] });
+  });
+
+  it("parses a nested single-key block into a plain object", () => {
+    const fm = parseSubagentFrontmatter(
+      "skills:\n  - audit-compliance-evidence\n  - vendor-escalation-management"
+    );
+    expect(fm.skills).toBeInstanceOf(Array);
+    expect(fm.skills).toEqual([
+      "audit-compliance-evidence",
+      "vendor-escalation-management",
+    ]);
+  });
+
+  it("parses a nested hooks block into an object without list items", () => {
+    const fm = parseSubagentFrontmatter(
+      "hooks:\n  PreToolUse:\n    - matcher: Bash\n    - command: bin/guard"
+    );
+    expect(typeof fm.hooks).toBe("string");
   });
 });
