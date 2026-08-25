@@ -2,6 +2,7 @@
 
 import { parseArgs, usageText } from "../dist/src/cli/args.js";
 import { runCli } from "../dist/src/cli/run.js";
+import { runDoctor } from "../dist/src/doctor/run.js";
 
 let options;
 try {
@@ -10,12 +11,30 @@ try {
   const message = error instanceof Error ? error.message : String(error);
   console.error(`${message}\n\n${usageText()}`);
   process.exitCode = 2;
-  process.exit(); // stop before running
+  process.exit();
 }
 
 if (options.help) {
   console.log(usageText());
   process.exitCode = 0;
+} else if (options.doctor) {
+  const report = runDoctor({ workspace: process.cwd() });
+  console.log(JSON.stringify(report, null, 2));
+  if (report.error !== undefined) {
+    console.error(`nori2reasonix doctor: ${report.error}`);
+  }
+  const summary = report.entries.reduce(
+    (acc, e) => {
+      acc[e.status] = (acc[e.status] ?? 0) + 1;
+      return acc;
+    },
+    {}
+  );
+  console.error(
+    `nori2reasonix doctor: ${report.entries.length} skill(s) checked:`,
+    JSON.stringify(summary)
+  );
+  process.exitCode = report.exitCode;
 } else {
   const result = runCli(options);
 

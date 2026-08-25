@@ -5,6 +5,7 @@ export interface CliOptions {
   output: string;
   target: Target;
   help: boolean;
+  doctor: boolean;
 }
 
 export class UsageError extends Error {
@@ -25,6 +26,7 @@ export function parseArgs(argv: string[]): CliOptions {
   let output: string | undefined;
   let target: Target = "both";
   let help = false;
+  let doctor = false;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
@@ -32,6 +34,9 @@ export function parseArgs(argv: string[]): CliOptions {
       case "--help":
       case "-h":
         help = true;
+        break;
+      case "--doctor":
+        doctor = true;
         break;
       case "--input":
         input = requireValue(argv, ++i, "--input");
@@ -53,7 +58,7 @@ export function parseArgs(argv: string[]): CliOptions {
     }
   }
 
-  if (!help) {
+  if (!help && !doctor) {
     if (input === undefined) {
       throw new UsageError("missing required --input <path>");
     }
@@ -67,6 +72,7 @@ export function parseArgs(argv: string[]): CliOptions {
     output: output ?? "",
     target,
     help,
+    doctor,
   };
 }
 
@@ -89,6 +95,7 @@ export function usageText(): string {
     "  --input <path>    Nori skillset dir, single skill/subagent package, or .claude tree",
     "  --output <path>   destination directory",
     "  --target <kind>   workspace | plugin | both (default: both)",
+    "  --doctor          integration check: compare active Nori skillset vs loaded Reasonix",
     "  --help, -h        show this help",
   ].join("\n");
 }
