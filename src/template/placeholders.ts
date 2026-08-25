@@ -15,13 +15,32 @@ export function resolvePlaceholders(
 ): PlaceholderResult {
   const warnings: Array<{ detail: string }> = [];
 
-  const content = text.replace(/\$([A-Za-z0-9_]+)/g, (match, name: string) => {
-    if (DOCUMENTED.has(name)) {
-      return args[name] ?? match;
+  const afterDollar = text.replace(
+    /\$([A-Za-z0-9_]+)/g,
+    (match, name: string) => {
+      if (DOCUMENTED.has(name)) {
+        return args[name] ?? match;
+      }
+      warnings.push({ detail: `unresolved placeholder "${match}" preserved` });
+      return match;
     }
-    warnings.push({ detail: `unresolved placeholder "${match}" preserved` });
-    return match;
-  });
+  );
+
+  // Nori f-string style: `{{name}}` or `{{name|default}}`.
+  const content = afterDollar.replace(
+    /\{\{\s*([A-Za-z0-9_.-]+)(\|([^{}]*))?\s*\}\}/g,
+    (match, name: string, _sep?: string, fallback?: string) => {
+      if (args[name] !== undefined) return args[name];
+      if (fallback !== undefined) {
+        warnings.push({
+          detail: `template token "${match}" resolved to default "${fallback}"`,
+        });
+        return fallback;
+      }
+      warnings.push({ detail: `unresolved template token "${match}" preserved` });
+      return match;
+    }
+  );
 
   return { content, warnings };
 }
