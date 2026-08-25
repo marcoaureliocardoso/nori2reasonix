@@ -5,7 +5,7 @@ import type {
   NoriSubagent,
 } from "../manifest/types.js";
 import { resolvePlaceholders } from "../template/placeholders.js";
-import { FIELD_MAP, TOOL_NAME_MAP } from "./table.js";
+import { FIELD_MAP, TOOL_NAME_MAP, slugify } from "./table.js";
 
 /** A Reasonix-native skill: frontmatter + body (same shape Nori uses). */
 export interface ReasonixSkill {
@@ -61,11 +61,15 @@ export interface TransformResult {
 export function transform(input: ParsedNoriInput): TransformResult {
   const warnings: TransformWarning[] = [];
 
-  const skills: ReasonixSkill[] = input.skills.map((skill) => ({
-    name: skill.name,
-    frontmatter: { ...skill.frontmatter },
-    body: skill.body,
-  }));
+  const skills: ReasonixSkill[] = input.skills.map((skill) => {
+    const title = String(skill.frontmatter.name ?? skill.name);
+    // The skills/<dir> directory name is Nori's canonical slug; use it when
+    // known, otherwise slugify the title.
+    const slug = skill.dir !== "" ? skill.dir : slugify(title);
+    const fm: Record<string, unknown> = { ...skill.frontmatter, name: slug };
+    if (fm.description === undefined) fm.description = title;
+    return { name: slug, frontmatter: fm, body: skill.body };
+  });
 
   const subagents: ReasonixSubagent[] = input.subagents.map((agent) => {
     const { allowedTools, toolWarnings } = mapTools(agent);

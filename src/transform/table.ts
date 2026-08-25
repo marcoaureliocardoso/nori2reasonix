@@ -35,6 +35,20 @@ export const UNMAPPED_TOOLS: Readonly<Record<string, string>> = {
 };
 
 /**
+ * Normalize a Nori skill/command name to a Reasonix `[A-Za-z0-9._-]{1,64}`
+ * slug. Spaces/others become `-`; the human title should already have been
+ * moved to `description` by the caller.
+ */
+export function slugify(name: string): string {
+  const slug = name
+    .trim()
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+  return slug || "skill";
+}
+
+/**
  * Structural mappings from the parsed Nori model to the Reasonix model.
  * `kind` selects which transform applies.
  */

@@ -81,4 +81,27 @@ describe("transform", () => {
     const result = transform(input);
     expect(result.warnings).toEqual([]);
   });
+
+  it("slugs skill names and preserves the original title as description", () => {
+    const input = parseNoriInput(readFixture("skillset"));
+    // One space-titled skill at runtime (no extra fixture file needed).
+    input.skills.push({
+      name: "Audit and Compliance Evidence Collection",
+      frontmatter: { name: "Audit and Compliance Evidence Collection" },
+      body: "# Audit\n",
+      path: "/fake/skills/audit/SKILL.md",
+      dir: "audit-compliance-evidence",
+      manifest: null,
+    });
+    const result = transform(input);
+    // dir is the canonical slug and wins over the space-titled name.
+    const skill = result.skills.find(
+      (s) => s.name === "audit-compliance-evidence"
+    );
+    expect(skill).toBeDefined();
+    expect(skill?.frontmatter.name).toBe("audit-compliance-evidence");
+    expect(skill?.frontmatter.description).toBe(
+      "Audit and Compliance Evidence Collection"
+    );
+  });
 });
