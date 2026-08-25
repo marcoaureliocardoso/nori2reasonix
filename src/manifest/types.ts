@@ -125,6 +125,8 @@ export interface ParsedRules {
 /** Result of local dependency-skill resolution (vendorized / stubbed / warned). */
 export interface ResolutionSummary {
   vendorized: string[];
+  /** Absolute source SKILL.md path per vendorized name (best effort). */
+  vendorPaths: Record<string, string>;
   stubbed: string[];
   warnings: Array<{ entity: string; field: string; detail: string }>;
 }

@@ -18,6 +18,7 @@ export function resolveDependencies(
 ): ResolutionSummary {
   const summary: ResolutionSummary = {
     vendorized: [],
+    vendorPaths: {},
     stubbed: [],
     warnings: [],
   };
@@ -52,31 +53,33 @@ export function resolveDependencies(
   }
 
   for (const name of names) {
-    const relative = [name, `${name}/SKILL.md`];
     let found = false;
     for (const profile of profiles) {
-      for (const rel of relative) {
-        try {
-          fs.readFile(path.join(profilesRoot, profile, "skills", name, "SKILL.md"));
-          found = true;
-          break;
-        } catch {
-          // keep probing
-        }
+      const candidate = path.join(
+        profilesRoot,
+        profile,
+        "skills",
+        name,
+        "SKILL.md"
+      );
+      try {
+        fs.readFile(candidate);
+        summary.vendorized.push(name);
+        summary.vendorPaths[name] = candidate;
+        found = true;
+        break;
+      } catch {
+        // keep probing other profiles
       }
-      if (found) break;
     }
-    if (found) {
-      summary.vendorized.push(name);
-    } else {
-      summary.stubbed.push(name);
-      summary.warnings.push({
-        entity: name,
-        field: "dependencies.skills",
-        detail:
-          "dependency not found in local Nori store; emitting stub skill (no network at convert time)",
-      });
-    }
+    if (found) continue;
+    summary.stubbed.push(name);
+    summary.warnings.push({
+      entity: name,
+      field: "dependencies.skills",
+      detail:
+        "dependency not found in local Nori store; emitting stub skill (no network at convert time)",
+    });
   }
 
   return summary;
