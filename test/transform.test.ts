@@ -140,4 +140,22 @@ describe("transform", () => {
       "Audit and Compliance Evidence Collection"
     );
   });
+
+  it("rewrites relative sidecar references to emitted canonical paths", () => {
+    const input = parseNoriInput(readFixture("skillset"));
+    input.skills.push({
+      name: "audit-compliance-evidence",
+      frontmatter: { name: "audit-compliance-evidence" },
+      body: "Use `templates/audit-evidence-record.md` and `references/risk-levels.md`.",
+      path: "/x/SKILL.md",
+      dir: "audit-compliance-evidence",
+      manifest: null,
+    });
+    const result = transform(input);
+    const skill = result.skills.find(
+      (s) => s.name === "audit-compliance-evidence"
+    );
+    expect(skill?.body).toContain("./templates/audit-evidence-record.md");
+    expect(skill?.body).toContain("./references/risk-levels.md");
+  });
 });

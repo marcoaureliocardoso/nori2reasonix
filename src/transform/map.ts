@@ -79,7 +79,11 @@ export function transform(input: ParsedNoriInput): TransformResult {
     const slug = skill.dir !== "" ? skill.dir : slugify(title);
     const fm: Record<string, unknown> = { ...skill.frontmatter, name: slug };
     if (fm.description === undefined) fm.description = title;
-    return { name: slug, frontmatter: fm, body: skill.body };
+    return {
+      name: slug,
+      frontmatter: fm,
+      body: rewriteSidecarPaths(skill.body),
+    };
   });
 
   const subagents: ReasonixSubagent[] = input.subagents.map((agent) => {
@@ -211,6 +215,21 @@ function normalizeSkillRef(name: string): string {
     .replace(/^skills\//, "")
     .replace(/\/SKILL\.md$/, "")
     .replace(/\.md$/, "");
+}
+
+const SIDECAR_SEGS = ["references", "scripts", "templates", "examples"];
+
+/** Rewrite relative skill-body sidecar refs to the emitted `./dir/file` form. */
+export function rewriteSidecarPaths(
+  body: string,
+  refs: string[] = SIDECAR_SEGS
+): string {
+  let out = body;
+  for (const seg of refs) {
+    const pattern = new RegExp(`(?<![\\w/])${seg}/([A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*)`, "g");
+    out = out.replace(pattern, `./${seg}/$1`);
+  }
+  return out;
 }
 
 function readList(value: unknown): string[] {
