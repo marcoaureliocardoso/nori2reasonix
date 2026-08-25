@@ -2,7 +2,7 @@
 
 Converter that translates any [Nori Skillset](https://noriskillsets.dev) package/skill into
 [Reasonix](https://github.com/esengine/DeepSeek-Reasonix)-native layouts, with read-only
-verification (`--doctor`) and forced synchronization (`--sync`).
+verification (`--doctor`), forced synchronization (`--sync`), and cleanup (`--clean`).
 
 Zero runtime dependencies · Node.js ≥ 22 · TypeScript · MIT.
 
@@ -15,12 +15,13 @@ Nori lets you manage *skillsets* and switch between them with
 directories (`.reasonix/skills`, `.reasonix/commands`, `REASONIX.md`, hooks,
 `.mcp.json`) and from plugin packages (`reasonix-plugin.json`).
 
-`nori2reasonix` is the bridge between the two. It answers three questions:
+`nori2reasonix` is the bridge between the two. It answers four questions:
 
 1. **Convert** — "generate a Reasonix workspace/plugin from this Nori skillset."
 2. **Verify** — "does the Reasonix workspace faithfully mirror the *currently active*
    Nori skillset?"
 3. **Synchronize** — "force the workspace back in sync, assuming the risks, with backups."
+4. **Clean** — "remove Nori-owned skills from the workspace, assuming the outcome, with backups."
 
 ---
 
@@ -156,6 +157,31 @@ Safety properties:
   only to `<output>/.reasonix/` (plus backups inside it). It never modifies
   the Nori store or `~/.claude/`.
 
+### Clean — `--clean`
+
+```bash
+node bin/nori2reasonix --clean                    # DRY-RUN: list what would go, touch nothing
+node bin/nori2reasonix --clean --yes              # execute (assume the outcome)
+node bin/nori2reasonix --clean --yes --force      # also remove skills not in ownership
+```
+
+Removes Nori-owned skills from the Reasonix workspace. A skill qualifies as
+*Nori-owned* when it is **recorded in `.nori2reasonix.json`** (the converter
+wrote it) or the `--doctor` diff marks it **`stale` / `drift`**
+(different from, or absent in, the active Nori source). `missing` and
+`shadowed` are not candidates — the former is not on disk, the latter is a
+scope decision.
+
+Safety properties:
+
+- **Dry-run by default** — `--clean` without `--yes` never removes.
+- **Ownership respected** — a candidate not recorded in ownership is skipped
+  unless `--force` is explicit.
+- **Removals are moves** — each file is renamed into
+  `.nori2reasonix/backup/<timestamp>/`, never deleted.
+- **Only `.reasonix/` is touched** — `--clean` never writes to the Nori store
+  or `~/.claude/`.
+
 ---
 
 ## How it works internally
@@ -164,7 +190,7 @@ The pipeline is a pure core wrapped by a thin I/O layer:
 
 ```
 manifest → transform → template → emit-workspace / emit-plugin
-                └──────── doctor/diff → sync (verify + force)
+                └──────── doctor/diff → sync (verify + force) / clean (remove)
 ```
 
 | Module | Responsibility |
@@ -177,6 +203,7 @@ manifest → transform → template → emit-workspace / emit-plugin
 | `src/emit/ownership.ts` | shared ownership-tracked writer (sha256 manifest) |
 | `src/doctor/` | source resolution, pure diff engine, read-only report runner |
 | `src/sync/` | diff → action plan; executor with dry-run/yes/force + backups |
+| `src/clean/` | ownership + diff → cleanup candidates; executor with dry-run/yes/force + backups |
 | `src/cli/` | argument parsing + orchestration |
 
 ### Design invariants
@@ -225,7 +252,7 @@ derived from these sources, not from examples in the wild.
 
 ```bash
 npm install                 # install dev deps
-npm test                    # run the vitest suite (59 tests)
+npm test                    # run the vitest suite (63 tests)
 npm run build               # compile TypeScript to dist/
 node bin/nori2reasonix --help
 ```
