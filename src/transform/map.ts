@@ -20,6 +20,12 @@ export interface ReasonixSubagent {
   description?: string;
   runAs: "subagent";
   allowedTools: string[];
+  /** Mapped from Nori `maxTurns`; clamped to [1,32]; 16 when absent. */
+  maxIters: number;
+  /** `skills:` preload list, normalized (no `skills/` prefix, no `.md`). */
+  skillRefs: string[];
+  /** The subagent's own hooks block (raw); merged into global hooks later. */
+  roleHooks: Record<string, unknown>;
   body: string;
 }
 
@@ -74,6 +80,7 @@ export function transform(input: ParsedNoriInput): TransformResult {
   const subagents: ReasonixSubagent[] = input.subagents.map((agent) => {
     const { allowedTools, toolWarnings } = mapTools(agent);
     for (const warning of toolWarnings) warnings.push(warning);
+    const meta = mapAgentMetadata(agent, warnings);
     const description =
       typeof agent.frontmatter.description === "string"
         ? agent.frontmatter.description
@@ -85,6 +92,9 @@ export function transform(input: ParsedNoriInput): TransformResult {
       description,
       runAs: "subagent",
       allowedTools,
+      maxIters: meta.maxIters,
+      skillRefs: meta.skillRefs,
+      roleHooks: meta.roleHooks,
       body: agent.body,
     };
   });
@@ -138,6 +148,76 @@ function mapTools(agent: NoriSubagent): {
     allowedTools.push(mapped);
   }
   return { allowedTools, toolWarnings: warnings };
+}
+
+/**
+ * Map subagent metadata the Reasonix model does not express 1:1:
+ * `maxTurns` → `maxIters` (clamped), `skills` → `skillRefs` (body preload),
+ * `disallowedTools` → warnings (no negative allowlist), `model` → warning
+ * unless `inherit` (no portable per-skill override), `hooks` → `roleHooks`.
+ */
+function mapAgentMetadata(
+  agent: NoriSubagent,
+  warnings: TransformWarning[]
+): {
+  maxIters: number;
+  skillRefs: string[];
+  roleHooks: Record<string, unknown>;
+} {
+  let maxIters = 16;
+  const rawTurns = agent.frontmatter.maxTurns;
+  if (typeof rawTurns === "number") {
+    maxIters = Math.min(32, Math.max(1, Math.round(rawTurns)));
+  } else if (typeof rawTurns === "string" && /^\d+$/.test(rawTurns)) {
+    maxIters = Math.min(32, Math.max(1, parseInt(rawTurns, 10)));
+  } else if (typeof rawTurns === "string" && /^\d+$/.test(rawTurns) === false) {
+    // not numeric: fall through to default, no warning (documented default)
+  }
+
+  const disallowed = readList(agent.frontmatter.disallowedTools);
+  for (const tool of disallowed) {
+    warnings.push({
+      entity: agent.name,
+      field: "disallowedTools",
+      detail: `tool "${tool}" is deny-listed in Nori; Reasonix has no negative allowlist — exclude it from allowed-tools instead (dropped)`,
+    });
+  }
+
+  const model = agent.frontmatter.model;
+  if (typeof model === "string" && model !== "inherit") {
+    warnings.push({
+      entity: agent.name,
+      field: "model",
+      detail: `model "${model}" has no portable Reasonix override — child will inherit the executor model`,
+    });
+  }
+
+  const skillRefs = readList(agent.frontmatter.skills).map(normalizeSkillRef);
+
+  return {
+    maxIters,
+    skillRefs,
+    roleHooks: (agent.hooks ?? {}) as Record<string, unknown>,
+  };
+}
+
+function normalizeSkillRef(name: string): string {
+  return name
+    .replace(/^skills\//, "")
+    .replace(/\/SKILL\.md$/, "")
+    .replace(/\.md$/, "");
+}
+
+function readList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String);
+  if (typeof value === "string") {
+    return value
+      .split("\n")
+      .map((s) => s.trim())
+      .filter((s) => s.startsWith("- "))
+      .map((s) => s.slice(2).trim());
+  }
+  return [];
 }
 
 function mapCommand(

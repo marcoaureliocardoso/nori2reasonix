@@ -40,6 +40,30 @@ describe("transform", () => {
     );
   });
 
+  it("maps subagent maxTurns to maxIters and skills list to refs", () => {
+    const input = parseNoriInput(readFixture("skillset"));
+    const result = transform(input);
+    const agent = result.subagents.find((a) => a.name === "packaged-agent");
+    expect(agent?.maxIters).toBe(12);
+    expect(agent?.skillRefs).toEqual(["brainstorming", "root-cause-analysis"]);
+  });
+
+  it("warns on disallowedTools and non-inherit model", () => {
+    const input = parseNoriInput(readFixture("skillset"));
+    const a = input.subagents.find((a) => a.name === "fixture-reviewer");
+    a!.frontmatter.disallowedTools = ["Write", "Edit"];
+    a!.frontmatter.model = "deepseek-pro";
+    const result = transform(input);
+    expect(
+      result.warnings.filter((w) => w.field === "disallowedTools")
+    ).toHaveLength(2);
+    expect(
+      result.warnings.some(
+        (w) => w.field === "model" && w.detail.includes("deepseek-pro")
+      )
+    ).toBe(true);
+  });
+
   it("warns but does not drop a tool name with no mapping", () => {
     const input = parseNoriInput(readFixture("skillset"));
     // Inject an unmapped tool into the subagent's frontmatter.
