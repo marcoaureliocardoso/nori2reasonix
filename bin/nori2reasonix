@@ -3,6 +3,8 @@
 import { parseArgs, usageText } from "../dist/src/cli/args.js";
 import { runCli } from "../dist/src/cli/run.js";
 import { runDoctor } from "../dist/src/doctor/run.js";
+import { planSync } from "../dist/src/sync/plan.js";
+import { executeSync } from "../dist/src/sync/run.js";
 
 let options;
 try {
@@ -35,6 +37,30 @@ if (options.help) {
     JSON.stringify(summary)
   );
   process.exitCode = report.exitCode;
+} else if (options.sync) {
+  const report = runDoctor({ workspace: process.cwd() });
+  const actions = planSync(report.entries);
+  const result = executeSync(actions, {
+    output: options.output || process.cwd(),
+    yes: options.yes,
+    force: options.force,
+    sourceSkillDir: report.source.noriJsonPath
+      ? report.source.noriJsonPath.replace(/nori\.json$/, "skills")
+      : undefined,
+  });
+
+  console.log(JSON.stringify(result, null, 2));
+  if (!result.executed) {
+    console.error(
+      `nori2reasonix sync: DRY-RUN — ${actions.length} action(s) planned (use --yes to execute)`
+    );
+  } else {
+    console.error(
+      `nori2reasonix sync: executed — ${result.written.length} written, ` +
+        `${result.backupPaths.length} backed up, ${result.skipped.length} skipped`
+    );
+  }
+  process.exitCode = report.exitCode === 3 ? 3 : result.executed ? 0 : 0;
 } else {
   const result = runCli(options);
 

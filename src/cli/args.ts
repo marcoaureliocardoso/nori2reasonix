@@ -6,6 +6,9 @@ export interface CliOptions {
   target: Target;
   help: boolean;
   doctor: boolean;
+  sync: boolean;
+  yes: boolean;
+  force: boolean;
 }
 
 export class UsageError extends Error {
@@ -27,6 +30,9 @@ export function parseArgs(argv: string[]): CliOptions {
   let target: Target = "both";
   let help = false;
   let doctor = false;
+  let sync = false;
+  let yes = false;
+  let force = false;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
@@ -37,6 +43,16 @@ export function parseArgs(argv: string[]): CliOptions {
         break;
       case "--doctor":
         doctor = true;
+        break;
+      case "--sync":
+        sync = true;
+        break;
+      case "--yes":
+      case "-y":
+        yes = true;
+        break;
+      case "--force":
+        force = true;
         break;
       case "--input":
         input = requireValue(argv, ++i, "--input");
@@ -58,7 +74,7 @@ export function parseArgs(argv: string[]): CliOptions {
     }
   }
 
-  if (!help && !doctor) {
+  if (!help && !doctor && !sync) {
     if (input === undefined) {
       throw new UsageError("missing required --input <path>");
     }
@@ -73,6 +89,9 @@ export function parseArgs(argv: string[]): CliOptions {
     target,
     help,
     doctor,
+    sync,
+    yes,
+    force,
   };
 }
 
@@ -96,6 +115,9 @@ export function usageText(): string {
     "  --output <path>   destination directory",
     "  --target <kind>   workspace | plugin | both (default: both)",
     "  --doctor          integration check: compare active Nori skillset vs loaded Reasonix",
+    "  --sync            force sync active Nori skillset into the workspace (dry-run unless --yes)",
+    "  --yes, -y         actually execute --sync (assume the risks)",
+    "  --force           also overwrite drifted user files (maximum risk)",
     "  --help, -h        show this help",
   ].join("\n");
 }

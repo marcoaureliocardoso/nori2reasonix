@@ -34,6 +34,7 @@
 - `CONCLUÍDO` — `git init` + primeiro commit (`2b55a0b`, branch `main`, 46 arquivos).
 - `CONCLUÍDO` — Validação `reasonix doctor capabilities --json` sobre workspace emitido: raiz `.reasonix/skills` com `status: ok`, skills descobertas (summary skills=70, commands=21, errors=0), `REASONIX.md` carregado como instrução (order 2). 1 warning remanescente é de skill count do plugin Superpowers instalado, não da emissão.
 - `CONCLUÍDO` — `nori2reasonix --doctor` (integração Nori↔Reasonix, só-leitura): resolve skillset ativo via `nori-skillsets install-location`+`current` (sem hardcode de `~/.nori`), cruza com `reasonix doctor capabilities --json`, e reporta `ok`/`missing`/`stale`/`drift`/`shadowed`. Smoke real: detectou drift genuíno (skillset ativo `personal/senior-infra-ops-analyst` vs skills stale carregados).
+- `CONCLUÍDO` — `nori2reasonix --sync` (sincronização forçada com risco assumido): dry-run por padrão, `--yes` executa, `--force` assume risco máximo. Actions do diff: `missing`→emit, `drift`→re-emit, `stale`→move para backup (`.nori2reasonix/backup/<ts>/`), `shadowed`→warning (não auto-corrigível). Smoke dry-run real: planejou `emit read-the-damn-docs` + dezenas de `remove` de skills stale, sem tocar o disco.
 
 ## Notas da sessão
 

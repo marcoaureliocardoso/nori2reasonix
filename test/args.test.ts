@@ -17,6 +17,9 @@ describe("parseArgs", () => {
       target: "workspace",
       help: false,
       doctor: false,
+      sync: false,
+      yes: false,
+      force: false,
     });
   });
 
