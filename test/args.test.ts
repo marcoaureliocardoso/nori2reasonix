@@ -18,6 +18,7 @@ describe("parseArgs", () => {
       help: false,
       doctor: false,
       sync: false,
+      clean: false,
       yes: false,
       force: false,
     });

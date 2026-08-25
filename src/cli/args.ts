@@ -7,6 +7,7 @@ export interface CliOptions {
   help: boolean;
   doctor: boolean;
   sync: boolean;
+  clean: boolean;
   yes: boolean;
   force: boolean;
 }
@@ -31,6 +32,7 @@ export function parseArgs(argv: string[]): CliOptions {
   let help = false;
   let doctor = false;
   let sync = false;
+  let clean = false;
   let yes = false;
   let force = false;
 
@@ -46,6 +48,9 @@ export function parseArgs(argv: string[]): CliOptions {
         break;
       case "--sync":
         sync = true;
+        break;
+      case "--clean":
+        clean = true;
         break;
       case "--yes":
       case "-y":
@@ -74,7 +79,7 @@ export function parseArgs(argv: string[]): CliOptions {
     }
   }
 
-  if (!help && !doctor && !sync) {
+  if (!help && !doctor && !sync && !clean) {
     if (input === undefined) {
       throw new UsageError("missing required --input <path>");
     }
@@ -90,6 +95,7 @@ export function parseArgs(argv: string[]): CliOptions {
     help,
     doctor,
     sync,
+    clean,
     yes,
     force,
   };
@@ -116,7 +122,8 @@ export function usageText(): string {
     "  --target <kind>   workspace | plugin | both (default: both)",
     "  --doctor          integration check: compare active Nori skillset vs loaded Reasonix",
     "  --sync            force sync active Nori skillset into the workspace (dry-run unless --yes)",
-    "  --yes, -y         actually execute --sync (assume the risks)",
+    "  --clean           remove Nori-owned skills from .reasonix (dry-run unless --yes)",
+    "  --yes, -y         actually execute --sync/--clean (assume the risks)",
     "  --force           also overwrite drifted user files (maximum risk)",
     "  --help, -h        show this help",
   ].join("\n");

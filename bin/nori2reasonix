@@ -5,6 +5,10 @@ import { runCli } from "../dist/src/cli/run.js";
 import { runDoctor } from "../dist/src/doctor/run.js";
 import { planSync } from "../dist/src/sync/plan.js";
 import { executeSync } from "../dist/src/sync/run.js";
+import { planClean } from "../dist/src/clean/plan.js";
+import { executeClean } from "../dist/src/clean/run.js";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 let options;
 try {
@@ -64,6 +68,45 @@ if (options.help) {
     );
   }
   process.exitCode = report.exitCode === 3 ? 3 : result.executed ? 0 : 0;
+} else if (options.clean) {
+  const output = options.output || process.cwd();
+  const report = runDoctor({ workspace: output });
+
+  // Owned = keys of .nori2reasonix.json (things the converter wrote).
+  const owned = new Set();
+  try {
+    const raw = JSON.parse(
+      readFileSync(path.join(output, ".nori2reasonix.json"), "utf8")
+    );
+    const files = raw.files ?? {};
+    for (const key of Object.keys(files)) {
+      if (key.startsWith(".reasonix/skills/") && key.endsWith("/SKILL.md")) {
+        owned.add(key.split("/")[2] ?? "");
+      }
+    }
+  } catch {
+    // No ownership manifest yet — nothing is "ours".
+  }
+
+  const candidates = planClean(owned, report.entries);
+  const result = executeClean(candidates, {
+    output,
+    yes: options.yes,
+    force: options.force,
+  });
+
+  console.log(JSON.stringify(result, null, 2));
+  if (!result.executed) {
+    console.error(
+      `nori2reasonix clean: DRY-RUN — ${candidates.length} skill(s) would be removed (use --yes to execute)`
+    );
+  } else {
+    console.error(
+      `nori2reasonix clean: removed ${result.written.length}, ` +
+        `${result.backupPaths.length} backed up, ${result.skipped.length} skipped`
+    );
+  }
+  process.exitCode = 0;
 } else {
   const result = runCli(options);
 
