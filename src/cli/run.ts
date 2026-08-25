@@ -1,5 +1,5 @@
 import { parseNoriInput } from "../manifest/parser.js";
-import { transform, type TransformWarning } from "../transform/map.js";
+import { transform, type TransformWarning, type TransformResult } from "../transform/map.js";
 import { planWorkspace } from "../emit-workspace/plan.js";
 import { writeWorkspace } from "../emit-workspace/writer.js";
 import { planPlugin } from "../emit-plugin/plan.js";
@@ -24,6 +24,8 @@ export interface CliSummary {
   written: string[];
   skipped: string[];
   warnings: TransformWarning[];
+  /** Human-readable conversion inventory (rendered by runCli). */
+  inventory: string;
 }
 
 export interface CliResult {
@@ -43,7 +45,7 @@ export function runCli(options: CliOptions): CliResult {
   if (options.help) {
     return {
       exitCode: 0,
-      summary: { written: [], skipped: [], warnings: [] },
+      summary: { written: [], skipped: [], warnings: [], inventory: "" },
     };
   }
 
@@ -81,7 +83,7 @@ export function runCli(options: CliOptions): CliResult {
 
   return {
     exitCode: 0,
-    summary: { written, skipped, warnings: result.warnings },
+    summary: { written, skipped, warnings: result.warnings, inventory: renderInventory(result) },
   };
 }
 
@@ -89,18 +91,32 @@ function inputError(error: unknown): CliResult {
   if (error instanceof NoriError) {
     return {
       exitCode: 3,
-      summary: { written: [], skipped: [], warnings: [] },
+      summary: { written: [], skipped: [], warnings: [], inventory: "" },
       error: error.message,
     };
   }
   const message = error instanceof Error ? error.message : String(error);
   return {
     exitCode: 1,
-    summary: { written: [], skipped: [], warnings: [] },
+    summary: { written: [], skipped: [], warnings: [], inventory: "" },
     error: message,
   };
 }
 
+/** Render a fixed human-readable conversion inventory (no silent drops). */
+export function renderInventory(result: TransformResult): string {
+  const eventCount = Object.keys(result.hooks).length;
+  const renamed = result.skills.filter(
+    (s) => s.frontmatter.name !== s.name
+  ).length;
+  return [
+    `skills:     ${result.skills.length}${renamed > 0 ? ` (${renamed} slug-renamed)` : ""}`,
+    `subagents:  ${result.subagents.length} (runAs: subagent)`,
+    `commands:   ${result.commands.length}`,
+    `hooks:      ${eventCount} events (${Object.keys(result.hooks).join(", ") || "none"})`,
+    `warnings:   ${result.warnings.length} (see below — none are silent drops)`,
+  ].join("\n");
+}
 /** Build PlannedFile entries that copy vendorized dependency SKILL.md files. */
 function planVendoredSkills(
   output: string,

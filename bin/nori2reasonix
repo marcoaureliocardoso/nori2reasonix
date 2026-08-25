@@ -133,6 +133,9 @@ if (options.help) {
       `nori2reasonix: skipped ${result.summary.skipped.length} user file(s)`
     );
   }
+  if (result.summary.inventory !== "") {
+    console.log(result.summary.inventory);
+  }
 
   process.exitCode = result.exitCode;
 }
