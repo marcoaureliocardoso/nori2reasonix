@@ -12,6 +12,10 @@ function fixtureResult() {
   return transform(parseNoriInput(readFixture("skillset")));
 }
 
+function emptyResolution() {
+  return { vendorized: [], stubbed: [], warnings: [] };
+}
+
 let dir: string;
 beforeEach(() => {
   dir = mkdtempSync(path.join(tmpdir(), "nor2r-plugin-"));
@@ -22,7 +26,7 @@ afterEach(() => {
 
 describe("planPlugin", () => {
   it("emits a native v2 reasonix-plugin.json with apiVersion and contributes paths", () => {
-    const plan = planPlugin(dir, fixtureResult());
+    const plan = planPlugin(dir, fixtureResult(), emptyResolution());
     const manifest = plan.find((f) => f.path.endsWith("reasonix-plugin.json"));
     expect(manifest).toBeDefined();
 
@@ -36,7 +40,7 @@ describe("planPlugin", () => {
   });
 
   it("emits a Claude compatibility manifest .claude-plugin/plugin.json", () => {
-    const plan = planPlugin(dir, fixtureResult());
+    const plan = planPlugin(dir, fixtureResult(), emptyResolution());
     const claude = plan.find((f) =>
       f.path.endsWith(".claude-plugin/plugin.json")
     );
@@ -48,7 +52,7 @@ describe("planPlugin", () => {
   });
 
   it("writes skills into the plugin skills/ tree with correct location", () => {
-    const plan = planPlugin(dir, fixtureResult());
+    const plan = planPlugin(dir, fixtureResult(), emptyResolution());
     const skill = plan.find((f) =>
       f.path.endsWith("skills/brainstorming/SKILL.md")
     );
@@ -59,7 +63,7 @@ describe("planPlugin", () => {
 
 describe("writePlugin", () => {
   it("writes all planned plugin files", () => {
-    const plan = planPlugin(dir, fixtureResult());
+    const plan = planPlugin(dir, fixtureResult(), emptyResolution());
     const result = writePlugin(plan);
 
     expect(result.skipped).toEqual([]);
@@ -67,7 +71,7 @@ describe("writePlugin", () => {
   });
 
   it("is idempotent and ownership-tracked", () => {
-    const plan = planPlugin(dir, fixtureResult());
+    const plan = planPlugin(dir, fixtureResult(), emptyResolution());
     writePlugin(plan);
     const second = writePlugin(plan);
     expect(second.written.length).toBe(plan.length);

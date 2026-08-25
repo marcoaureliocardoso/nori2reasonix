@@ -6,8 +6,16 @@ import { planPlugin } from "../emit-plugin/plan.js";
 import { writePlugin } from "../emit-plugin/writer.js";
 import { listSkillAssets } from "../assets.js";
 import { nodeFs } from "../manifest/discovery.js";
+import { resolveDependencies } from "../dependencies.js";
 import { NoriError } from "../manifest/errors.js";
 import type { CliOptions, Target } from "./args.js";
+import { execFileSync } from "node:child_process";
+
+/** Default CLI executor for `nori-skillsets install-location` probing. */
+export const defaultExec = (
+  command: string,
+  args: string[]
+): string => execFileSync(command, args, { encoding: "utf8" }).trim();
 
 export interface CliSummary {
   written: string[];
@@ -45,6 +53,7 @@ export function runCli(options: CliOptions): CliResult {
 
   const result = transform(parsed);
   const assets = listSkillAssets(options.input, nodeFs, parsed.skills);
+  const resolution = resolveDependencies(parsed, defaultExec, nodeFs);
 
   const written: string[] = [];
   const skipped: string[] = [];
@@ -57,7 +66,7 @@ export function runCli(options: CliOptions): CliResult {
   }
 
   if (options.target === "plugin" || options.target === "both") {
-    const pluginPlan = planPlugin(options.output, result);
+    const pluginPlan = planPlugin(options.output, result, resolution, assets);
     const pluginWrite = writePlugin(pluginPlan);
     written.push(...pluginWrite.written);
     skipped.push(...pluginWrite.skipped);
@@ -85,4 +94,4 @@ function inputError(error: unknown): CliResult {
   };
 }
 
-export type { Target };
+

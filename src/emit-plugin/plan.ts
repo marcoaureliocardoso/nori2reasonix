@@ -1,11 +1,14 @@
 import path from "node:path";
+import { readFileSync } from "node:fs";
 import type { TransformResult } from "../transform/map.js";
 import { renderSubagentFrontmatter } from "../emit-workspace/plan.js";
+import type { ResolutionSummary, SkillAsset } from "../manifest/types.js";
+import { dependencyStubContent } from "../dependencies.js";
 
 export interface PlannedFile {
   path: string;
   content: string;
-  kind: "manifest" | "claude-manifest" | "skill" | "command" | "mcp";
+  kind: "manifest" | "claude-manifest" | "skill" | "command" | "mcp" | "asset";
 }
 
 /**
@@ -16,15 +19,21 @@ export interface PlannedFile {
  */
 export function planPlugin(
   output: string,
-  result: TransformResult
+  result: TransformResult,
+  resolution: ResolutionSummary,
+  assets: SkillAsset[] = []
 ): PlannedFile[] {
   const plan: PlannedFile[] = [];
 
   // Native v2 manifest.
   // Nori subagents map to Reasonix runAs:subagent skills (Reasonix-native
-  // subagent profiles), so only skills/commands are declared here.
+  // subagent profiles), so skills/commands are declared as resources and
+  // hooks are declared when present.
   const contributes: Record<string, unknown> = { skills: ["skills"] };
   if (result.commands.length > 0) contributes.commands = ["commands"];
+  if (Object.keys(result.hooks).length > 0) {
+    contributes.hooks = { settings: result.hooks };
+  }
 
   plan.push({
     path: path.join(output, "reasonix-plugin.json"),
@@ -113,6 +122,35 @@ export function planPlugin(
       content: JSON.stringify(merged, null, 2) + "\n",
       kind: "mcp",
     });
+  }
+
+  // Dependency stubs (vendorized copies are handled by runCli in Task 14).
+  for (const name of resolution.stubbed) {
+    plan.push({
+      path: path.join(output, "skills", safeName(name), "SKILL.md"),
+      content: dependencyStubContent(name),
+      kind: "skill",
+    });
+  }
+
+  // Colocated sidecar assets under skills/<name>/.
+  for (const asset of assets) {
+    if (asset.skillName === "") continue;
+    try {
+      const content = readFileSync(asset.filePath, "utf8");
+      plan.push({
+        path: path.join(
+          output,
+          "skills",
+          safeName(asset.skillName),
+          asset.relPath
+        ),
+        content,
+        kind: "asset",
+      });
+    } catch {
+      // Unreadable asset — skip at emit.
+    }
   }
 
   return plan;
