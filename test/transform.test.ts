@@ -23,9 +23,8 @@ describe("transform", () => {
     const input = parseNoriInput(readFixture("skillset"));
     const result = transform(input);
 
-    expect(result.subagents).toHaveLength(1);
-    const agent = result.subagents[0];
-    expect(agent?.name).toBe("fixture-reviewer");
+    expect(result.subagents).toHaveLength(2);
+    const agent = result.subagents.find((a) => a.name === "fixture-reviewer");
     expect(agent?.runAs).toBe("subagent");
     // Nori "Read, Grep, Glob" -> Reasonix "read_file, grep, glob"
     expect(agent?.allowedTools).toEqual(["read_file", "grep", "glob"]);

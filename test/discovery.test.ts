@@ -17,11 +17,21 @@ describe("discoverSkillset", () => {
 
   it("discovers subagents with tools parsed to a list", () => {
     const result = discoverSkillset(readFixture("skillset"));
-    expect(result.subagents).toHaveLength(1);
-    const agent = result.subagents[0];
-    expect(agent?.name).toBe("fixture-reviewer");
+    expect(result.subagents).toHaveLength(2);
+    const agent = result.subagents.find((a) => a.name === "fixture-reviewer");
     expect(agent?.frontmatter.tools).toEqual(["Read", "Grep", "Glob"]);
     expect(agent?.frontmatter.model).toBe("inherit");
+  });
+
+  it("discovers a directory-packaged subagent (SUBAGENT.md + nori.json)", () => {
+    const result = discoverSkillset(readFixture("skillset"));
+    const agent = result.subagents.find((a) => a.name === "packaged-agent");
+    expect(agent).toBeDefined();
+    expect(agent?.dir).toBe("packaged-agent");
+    expect(agent?.json?.description).toBe(
+      "Packaged agent description from its manifest."
+    );
+    expect(agent?.skills).toEqual(["brainstorming", "root-cause-analysis"]);
   });
 
   it("skips doc files without name frontmatter in subagents/", () => {

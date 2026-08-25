@@ -4,9 +4,11 @@ import { NoriError } from "./errors.js";
 import { parseMarkdown } from "./markdown.js";
 import type {
   DiscoveryResult,
+  Frontmatter,
+  JsonObject,
   NoriManifest,
   NoriMcpServer,
-  JsonObject,
+  NormalizedSubagentHooks,
 } from "./types.js";
 
 /** The known nori.json `type` values for single (non-skillset) packages. */
@@ -95,6 +97,7 @@ function parseSingleSkill(
       frontmatter: doc.frontmatter,
       body: doc.body,
       path: skillPath,
+      dir: "",
       manifest: rawManifest,
     });
   }
@@ -136,6 +139,10 @@ function parseSubagentPackage(
         frontmatter: doc.frontmatter,
         body: doc.body,
         path: filePath,
+        dir: "",
+        json: manifest ?? null,
+        skills: readFrontmatterList(doc.frontmatter, "skills"),
+        hooks: readHooksBlock(doc.frontmatter),
       },
     ],
     slashCommands: [],
@@ -194,6 +201,33 @@ function readInstructions(root: string): string | null {
     if (content !== null) return content;
   }
   return null;
+}
+
+/** Read a frontmatter list field (array, comma string, or indented `- item`). */
+function readFrontmatterList(fm: Frontmatter, key: string): string[] {
+  const raw: unknown = fm[key];
+  if (Array.isArray(raw)) return raw.map(String);
+  if (typeof raw === "string") {
+    return raw
+      .split("\n")
+      .map((s) => s.trim())
+      .filter((s) => s.startsWith("- "))
+      .map((s) => s.slice(2).trim());
+  }
+  return [];
+}
+
+/**
+ * The `hooks:` block arrives either as a parsed object (flat parser handles
+ * only one nesting level via the raw-joined string) or as a raw string. We
+ * keep the raw string form verbatim here; transform maps it later.
+ */
+function readHooksBlock(fm: Frontmatter): NormalizedSubagentHooks {
+  const raw: unknown = fm["hooks"];
+  if (raw !== null && typeof raw === "object" && !Array.isArray(raw)) {
+    return raw as NormalizedSubagentHooks;
+  }
+  return {};
 }
 
 function safeReadFile(

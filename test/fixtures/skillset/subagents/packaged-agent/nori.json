@@ -1,0 +1,6 @@
+{
+  "name": "packaged-agent",
+  "version": "1.0.0",
+  "type": "subagent",
+  "description": "Packaged agent description from its manifest."
+}

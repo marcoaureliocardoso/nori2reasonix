@@ -17,7 +17,7 @@ describe("parseNoriInput", () => {
       "read-the-damn-docs": "*",
     });
     expect(parsed.skills).toHaveLength(1);
-    expect(parsed.subagents).toHaveLength(1);
+    expect(parsed.subagents).toHaveLength(2);
     expect(parsed.slashCommands).toHaveLength(1);
     expect(parsed.mcp).toHaveLength(1);
     expect(parsed.unknownFields).toEqual({
