@@ -1,12 +1,14 @@
 import path from "node:path";
+import { readFileSync } from "node:fs";
 import type { TransformResult } from "../transform/map.js";
 import type { ReasonixSubagent } from "../transform/map.js";
+import type { SkillAsset } from "../manifest/types.js";
 
 export interface PlannedFile {
   /** Absolute destination path. */
   path: string;
   content: string;
-  kind: "skill" | "command" | "settings" | "mcp" | "instructions";
+  kind: "skill" | "command" | "settings" | "mcp" | "instructions" | "asset";
 }
 
 /** Render a subagent profile's frontmatter + preload-directive body. */
@@ -39,7 +41,8 @@ export function renderSubagentFrontmatter(
  */
 export function planWorkspace(
   output: string,
-  result: TransformResult
+  result: TransformResult,
+  assets: SkillAsset[] = []
 ): PlannedFile[] {
   const plan: PlannedFile[] = [];
 
@@ -120,6 +123,28 @@ export function planWorkspace(
       content: result.instructions,
       kind: "instructions",
     });
+  }
+
+  // Colocated sidecar assets: read at plan time (all skillset scripts are
+  // text) and copy next to the emitted skill directory.
+  for (const asset of assets) {
+    if (asset.skillName === "") continue; // skillset-root assets handled later
+    try {
+      const content = readFileSync(asset.filePath, "utf8");
+      plan.push({
+        path: path.join(
+          output,
+          ".reasonix",
+          "skills",
+          safeName(asset.skillName),
+          asset.relPath
+        ),
+        content,
+        kind: "asset",
+      });
+    } catch {
+      // Unreadable asset — skip silently at emit; caller inventory reports it.
+    }
   }
 
   return plan;

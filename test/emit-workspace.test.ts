@@ -6,6 +6,8 @@ import { parseNoriInput } from "../src/manifest/parser.ts";
 import { transform } from "../src/transform/map.ts";
 import { planWorkspace } from "../src/emit-workspace/plan.ts";
 import { writeWorkspace } from "../src/emit-workspace/writer.ts";
+import { listSkillAssets } from "../src/assets.ts";
+import { nodeFs } from "../src/manifest/discovery.ts";
 import { readFixture } from "./helpers.ts";
 
 function fixtureResult() {
@@ -37,6 +39,18 @@ describe("planWorkspace", () => {
     const skill = plan.find((f) => f.path.endsWith("brainstorming/SKILL.md"));
     expect(skill?.content).toContain("name: brainstorming");
     expect(skill?.content).toContain("# Brainstorming");
+  });
+
+  it("copies skill sidecar assets next to emitted skills", () => {
+    const input = parseNoriInput(readFixture("skillset"));
+    const assets = listSkillAssets(readFixture("skillset"), nodeFs, input.skills);
+    const result = transform(input);
+    const plan = planWorkspace(dir, result, assets);
+    const assetFiles = plan.filter((f) => f.kind === "asset");
+    expect(assetFiles.length).toBeGreaterThan(0);
+    expect(
+      assetFiles.some((f) => f.path.endsWith("templates/idea-template.md"))
+    ).toBe(true);
   });
 
   it("emits max-iters, allowed-tools, and preload body for subagents", () => {

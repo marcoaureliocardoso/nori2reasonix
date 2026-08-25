@@ -4,6 +4,8 @@ import { planWorkspace } from "../emit-workspace/plan.js";
 import { writeWorkspace } from "../emit-workspace/writer.js";
 import { planPlugin } from "../emit-plugin/plan.js";
 import { writePlugin } from "../emit-plugin/writer.js";
+import { listSkillAssets } from "../assets.js";
+import { nodeFs } from "../manifest/discovery.js";
 import { NoriError } from "../manifest/errors.js";
 import type { CliOptions, Target } from "./args.js";
 
@@ -42,12 +44,13 @@ export function runCli(options: CliOptions): CliResult {
   }
 
   const result = transform(parsed);
+  const assets = listSkillAssets(options.input, nodeFs, parsed.skills);
 
   const written: string[] = [];
   const skipped: string[] = [];
 
   if (options.target === "workspace" || options.target === "both") {
-    const wsPlan = planWorkspace(options.output, result);
+    const wsPlan = planWorkspace(options.output, result, assets);
     const wsWrite = writeWorkspace(wsPlan);
     written.push(...wsWrite.written);
     skipped.push(...wsWrite.skipped);
