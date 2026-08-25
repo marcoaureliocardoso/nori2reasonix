@@ -46,6 +46,8 @@ summary. Consult these before changing `transform`/`emit-*`:
 
 Key verified facts (2026-08-25): skills discover at `<workspace>/{.reasonix,.agents,.agent,.claude}/skills/` as `<name>/SKILL.md` or flat `<name>.md`; commands are `<name>.md` under `commands/` with `git/commit.md` → `/git:commit`; hooks are 11 events, project scope via `.reasonix/settings.json` (auto-loaded), `match` is an anchored regex, `timeout` in ms; MCP order is `reasonix.toml [[plugins]]` → `.mcp.json` → plugin packages; instructions load `REASONIX.md`/`AGENTS.md`/`CLAUDE.md`/`*.local.md`.
 
+`web_search` vs `web_fetch` (see PR esengine#7340): `web_search` is NOT a Reasonix built-in — it is an opt-in provider-side server tool (`web_search = true` on `[[providers]]`), so it never appears in the harness tool registry that skill `allowed-tools` resolves against. `web_fetch` IS a built-in (HTTPS fetch of a known URL). The converter must therefore NOT remap `web_search`→`web_fetch` (that would silently change intent: discovery-vs-consumption); it reports `web_search` in `allowed-tools` as an unmapped warning, and target enablement (provider flag or a search MCP server) is an environment concern outside the converter.
+
 ## Notes
 
 - Scaffold created (2026-08-25): `package.json`, `tsconfig.json`, `bin/nori2reasonix` placeholder, `vitest.config.ts`, `test/`. `npm install` (0 vulnerabilities), `npm test`, `npm run build` all verified. The `--help`/`--input`/`--output`/`--target` flags and the six modules (`manifest`…`cli`) remain to be implemented.
