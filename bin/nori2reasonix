@@ -1,0 +1,47 @@
+#!/usr/bin/env node
+
+import { parseArgs, usageText } from "../dist/src/cli/args.js";
+import { runCli } from "../dist/src/cli/run.js";
+
+let options;
+try {
+  options = parseArgs(process.argv.slice(2));
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`${message}\n\n${usageText()}`);
+  process.exitCode = 2;
+  process.exit(); // stop before running
+}
+
+if (options.help) {
+  console.log(usageText());
+  process.exitCode = 0;
+} else {
+  const result = runCli(options);
+
+  if (result.error !== undefined) {
+    console.error(`nori2reasonix: ${result.error}`);
+  }
+
+  if (result.summary.warnings.length > 0) {
+    console.error(
+      `nori2reasonix: ${result.summary.warnings.length} warning(s):`
+    );
+    for (const warning of result.summary.warnings) {
+      console.error(
+        `  - ${warning.entity}.${warning.field}: ${warning.detail}`
+      );
+    }
+  }
+
+  if (result.summary.written.length > 0) {
+    console.log(`nori2reasonix: wrote ${result.summary.written.length} file(s)`);
+  }
+  if (result.summary.skipped.length > 0) {
+    console.log(
+      `nori2reasonix: skipped ${result.summary.skipped.length} user file(s)`
+    );
+  }
+
+  process.exitCode = result.exitCode;
+}

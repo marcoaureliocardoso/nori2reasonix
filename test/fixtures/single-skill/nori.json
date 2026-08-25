@@ -1,0 +1,7 @@
+{
+  "name": "fixture-single-skill",
+  "version": "2.0.0",
+  "type": "skill",
+  "description": "A standalone skill package",
+  "registryURL": "https://noriskillsets.dev"
+}

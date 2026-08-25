@@ -1,0 +1,27 @@
+{
+  "name": "nori2reasonix",
+  "version": "0.1.0",
+  "description": "Converter that translates any Nori Skillset package/skill into Reasonix-native workspace layouts and Reasonix plugin packages.",
+  "type": "module",
+  "bin": {
+    "nori2reasonix": "bin/nori2reasonix"
+  },
+  "files": [
+    "bin/",
+    "dist/"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^26.3.0",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.11"
+  }
+}
