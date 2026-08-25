@@ -1,11 +1,37 @@
 import path from "node:path";
 import type { TransformResult } from "../transform/map.js";
+import type { ReasonixSubagent } from "../transform/map.js";
 
 export interface PlannedFile {
   /** Absolute destination path. */
   path: string;
   content: string;
   kind: "skill" | "command" | "settings" | "mcp" | "instructions";
+}
+
+/** Render a subagent profile's frontmatter + preload-directive body. */
+export function renderSubagentFrontmatter(
+  agent: ReasonixSubagent
+): { frontmatter: Record<string, unknown>; body: string } {
+  const frontmatter: Record<string, unknown> = {
+    name: agent.name,
+    description: agent.description ?? agent.name,
+    runAs: "subagent",
+    "allowed-tools": agent.allowedTools,
+    "max-iters": agent.maxIters,
+  };
+  const preload =
+    agent.skillRefs.length === 0
+      ? ""
+      : "\n\n## Preloaded skills\n\nLoad each before acting (Reasonix has no frontmatter preload):\n\n" +
+        agent.skillRefs
+          .map(
+            (s) =>
+              `- Use run_skill with name "${s}" (arguments: the current task).`
+          )
+          .join("\n") +
+        "\n";
+  return { frontmatter, body: agent.body + preload };
 }
 
 /**
@@ -33,12 +59,7 @@ export function planWorkspace(
   }
 
   for (const agent of result.subagents) {
-    const frontmatter: Record<string, unknown> = {
-      name: agent.name,
-      description: agent.description ?? agent.name,
-      runAs: "subagent",
-      "allowed-tools": agent.allowedTools,
-    };
+    const { frontmatter, body } = renderSubagentFrontmatter(agent);
     plan.push({
       path: path.join(
         output,
@@ -47,7 +68,7 @@ export function planWorkspace(
         safeName(agent.name),
         "SKILL.md"
       ),
-      content: `${renderFrontmatter(frontmatter)}\n${agent.body}`,
+      content: `${renderFrontmatter(frontmatter)}\n${body}`,
       kind: "skill",
     });
   }

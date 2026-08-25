@@ -39,6 +39,17 @@ describe("planWorkspace", () => {
     expect(skill?.content).toContain("# Brainstorming");
   });
 
+  it("emits max-iters, allowed-tools, and preload body for subagents", () => {
+    const plan = planWorkspace(dir, fixtureResult());
+    const agentFile = plan.find((f) =>
+      f.path.endsWith("packaged-agent/SKILL.md")
+    );
+    expect(agentFile?.content).toContain("runAs: subagent");
+    expect(agentFile?.content).toContain("max-iters: 12");
+    expect(agentFile?.content).toContain("allowed-tools: read_file");
+    expect(agentFile?.content).toContain("brainstorming");
+  });
+
   it("emits .reasonix/settings.json with mapped hooks when present", () => {
     const plan = planWorkspace(dir, fixtureResult());
     const settings = plan.find((f) => f.path.endsWith("settings.json"));

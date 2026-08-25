@@ -1,5 +1,6 @@
 import path from "node:path";
 import type { TransformResult } from "../transform/map.js";
+import { renderSubagentFrontmatter } from "../emit-workspace/plan.js";
 
 export interface PlannedFile {
   path: string;
@@ -73,15 +74,10 @@ export function planPlugin(
     });
   }
   for (const agent of result.subagents) {
-    const frontmatter: Record<string, unknown> = {
-      name: agent.name,
-      description: agent.description ?? agent.name,
-      runAs: "subagent",
-      "allowed-tools": agent.allowedTools,
-    };
+    const { frontmatter, body } = renderSubagentFrontmatter(agent);
     plan.push({
       path: path.join(output, "skills", safeName(agent.name), "SKILL.md"),
-      content: `${renderFrontmatter(frontmatter)}\n${agent.body}`,
+      content: `${renderFrontmatter(frontmatter)}\n${body}`,
       kind: "skill",
     });
   }
