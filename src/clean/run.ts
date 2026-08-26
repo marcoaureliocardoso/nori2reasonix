@@ -75,6 +75,10 @@ export function executeClean(
 }
 
 function skillTargetPath(output: string, skill: string): string {
+  if (skill.startsWith("artifact:")) {
+    const rel = skill.slice("artifact:".length);
+    return path.join(output, rel);
+  }
   return path.join(output, ".reasonix", "skills", skill, "SKILL.md");
 }
 

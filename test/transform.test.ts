@@ -23,12 +23,45 @@ describe("transform", () => {
     const input = parseNoriInput(readFixture("skillset"));
     const result = transform(input);
 
-    expect(result.subagents).toHaveLength(1);
-    const agent = result.subagents[0];
-    expect(agent?.name).toBe("fixture-reviewer");
+    expect(result.subagents).toHaveLength(2);
+    const agent = result.subagents.find((a) => a.name === "fixture-reviewer");
     expect(agent?.runAs).toBe("subagent");
     // Nori "Read, Grep, Glob" -> Reasonix "read_file, grep, glob"
     expect(agent?.allowedTools).toEqual(["read_file", "grep", "glob"]);
+  });
+
+  it("uses the subagent nori.json description when frontmatter lacks one", () => {
+    const input = parseNoriInput(readFixture("skillset"));
+    const result = transform(input);
+    // packaged-agent has no frontmatter description; its nori.json does.
+    const agent = result.subagents.find((a) => a.name === "packaged-agent");
+    expect(agent?.description).toBe(
+      "Packaged agent description from its manifest."
+    );
+  });
+
+  it("maps subagent maxTurns to maxIters and skills list to refs", () => {
+    const input = parseNoriInput(readFixture("skillset"));
+    const result = transform(input);
+    const agent = result.subagents.find((a) => a.name === "packaged-agent");
+    expect(agent?.maxIters).toBe(12);
+    expect(agent?.skillRefs).toEqual(["brainstorming", "root-cause-analysis"]);
+  });
+
+  it("warns on disallowedTools and non-inherit model", () => {
+    const input = parseNoriInput(readFixture("skillset"));
+    const a = input.subagents.find((a) => a.name === "fixture-reviewer");
+    a!.frontmatter.disallowedTools = ["Write", "Edit"];
+    a!.frontmatter.model = "deepseek-pro";
+    const result = transform(input);
+    expect(
+      result.warnings.filter((w) => w.field === "disallowedTools")
+    ).toHaveLength(2);
+    expect(
+      result.warnings.some(
+        (w) => w.field === "model" && w.detail.includes("deepseek-pro")
+      )
+    ).toBe(true);
   });
 
   it("warns but does not drop a tool name with no mapping", () => {
@@ -71,5 +104,71 @@ describe("transform", () => {
     const input = parseNoriInput(readFixture("skillset"));
     const result = transform(input);
     expect(result.warnings).toEqual([]);
+  });
+
+  it("maps subagent role hooks into Reasonix events and renames matcher to match", () => {
+    const input = parseNoriInput(readFixture("skillset"));
+    const result = transform(input);
+    const hooks = result.hooks as Record<string, unknown[]>;
+    const pre = hooks["PreToolUse"] as Array<Record<string, unknown>>;
+    expect(pre?.length).toBeGreaterThan(0);
+    expect(pre?.[0]?.match).toBe("bash|Bash");
+    expect(String(pre?.[0]?.command)).toContain("command-guard-launcher.sh");
+    expect(String(pre?.[0]?.command)).not.toContain("{{skills_dir}}");
+    // Default skillsRoot is "skills" (plugin layout).
+    expect(String(pre?.[0]?.command)).toContain("skills/");
+    // Nori timeouts are seconds; Reasonix `timeout` is milliseconds.
+    expect(pre?.[0]?.timeout).toBe(7000);
+  });
+
+  it("resolves {{skills_dir}} against the workspace skillsRoot option", () => {
+    const input = parseNoriInput(readFixture("skillset"));
+    const result = transform(input, { skillsRoot: ".reasonix/skills" });
+    const hooks = result.hooks as Record<string, unknown[]>;
+    const pre = hooks["PreToolUse"] as Array<Record<string, unknown>>;
+    expect(String(pre?.[0]?.command)).toContain(
+      ".reasonix/skills/command-driven-operations"
+    );
+  });
+
+  it("slugs skill names and preserves the original title as description", () => {
+    const input = parseNoriInput(readFixture("skillset"));
+    // One space-titled skill at runtime (no extra fixture file needed).
+    input.skills.push({
+      name: "Audit and Compliance Evidence Collection",
+      frontmatter: { name: "Audit and Compliance Evidence Collection" },
+      body: "# Audit\n",
+      path: "/fake/skills/audit/SKILL.md",
+      dir: "audit-compliance-evidence",
+      manifest: null,
+    });
+    const result = transform(input);
+    // dir is the canonical slug and wins over the space-titled name.
+    const skill = result.skills.find(
+      (s) => s.name === "audit-compliance-evidence"
+    );
+    expect(skill).toBeDefined();
+    expect(skill?.frontmatter.name).toBe("audit-compliance-evidence");
+    expect(skill?.frontmatter.description).toBe(
+      "Audit and Compliance Evidence Collection"
+    );
+  });
+
+  it("rewrites relative sidecar references to emitted canonical paths", () => {
+    const input = parseNoriInput(readFixture("skillset"));
+    input.skills.push({
+      name: "audit-compliance-evidence",
+      frontmatter: { name: "audit-compliance-evidence" },
+      body: "Use `templates/audit-evidence-record.md` and `references/risk-levels.md`.",
+      path: "/x/SKILL.md",
+      dir: "audit-compliance-evidence",
+      manifest: null,
+    });
+    const result = transform(input);
+    const skill = result.skills.find(
+      (s) => s.name === "audit-compliance-evidence"
+    );
+    expect(skill?.body).toContain("./templates/audit-evidence-record.md");
+    expect(skill?.body).toContain("./references/risk-levels.md");
   });
 });

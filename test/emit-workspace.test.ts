@@ -6,6 +6,8 @@ import { parseNoriInput } from "../src/manifest/parser.ts";
 import { transform } from "../src/transform/map.ts";
 import { planWorkspace } from "../src/emit-workspace/plan.ts";
 import { writeWorkspace } from "../src/emit-workspace/writer.ts";
+import { listSkillAssets } from "../src/assets.ts";
+import { nodeFs } from "../src/manifest/discovery.ts";
 import { readFixture } from "./helpers.ts";
 
 function fixtureResult() {
@@ -39,9 +41,36 @@ describe("planWorkspace", () => {
     expect(skill?.content).toContain("# Brainstorming");
   });
 
-  it("does not emit an empty settings.json when there are no hooks", () => {
+  it("copies skill sidecar assets next to emitted skills", () => {
+    const input = parseNoriInput(readFixture("skillset"));
+    const assets = listSkillAssets(readFixture("skillset"), nodeFs, input.skills);
+    const result = transform(input);
+    const plan = planWorkspace(dir, result, assets);
+    const assetFiles = plan.filter((f) => f.kind === "asset");
+    expect(assetFiles.length).toBeGreaterThan(0);
+    expect(
+      assetFiles.some((f) => f.path.endsWith("templates/idea-template.md"))
+    ).toBe(true);
+  });
+
+  it("emits max-iters, allowed-tools, and preload body for subagents", () => {
     const plan = planWorkspace(dir, fixtureResult());
-    expect(plan.some((f) => f.path.endsWith("settings.json"))).toBe(false);
+    const agentFile = plan.find((f) =>
+      f.path.endsWith("packaged-agent/SKILL.md")
+    );
+    expect(agentFile?.content).toContain("runAs: subagent");
+    expect(agentFile?.content).toContain("max-iters: 12");
+    expect(agentFile?.content).toContain("allowed-tools: read_file");
+    expect(agentFile?.content).toContain("brainstorming");
+  });
+
+  it("emits .reasonix/settings.json with mapped hooks when present", () => {
+    const plan = planWorkspace(dir, fixtureResult());
+    const settings = plan.find((f) => f.path.endsWith("settings.json"));
+    expect(settings).toBeDefined();
+    expect(settings?.content).toContain('"PreToolUse"');
+    expect(settings?.content).toContain('"PreCompact"');
+    expect(settings?.content).toContain('"match"');
   });
 
   it("preserves ${VAR} literals in .mcp.json", () => {

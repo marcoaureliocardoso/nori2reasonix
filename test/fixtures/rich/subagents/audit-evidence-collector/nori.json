@@ -1,0 +1,6 @@
+{
+  "name": "audit-evidence-collector",
+  "version": "1.0.0",
+  "type": "subagent",
+  "description": "Use when collecting and documenting operational evidence for audit."
+}

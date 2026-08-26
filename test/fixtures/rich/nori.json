@@ -1,0 +1,11 @@
+{
+  "name": "rich-skillset",
+  "version": "0.13.0",
+  "type": "skillset",
+  "description": "Realistic senior-infra-ops-analyst-shaped fixture",
+  "dependencies": {
+    "skills": {
+      "read-the-damn-docs": "*"
+    }
+  }
+}

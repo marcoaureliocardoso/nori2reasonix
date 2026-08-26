@@ -25,6 +25,20 @@ describe("resolvePlaceholders", () => {
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]?.detail).toContain("$FOO");
   });
+
+  it("resolves Nori f-string tokens with a default", () => {
+    const r = resolvePlaceholders("Hello {{name|world}} and $ARGUMENTS", {
+      name: "marco",
+    });
+    expect(r.content).toBe("Hello marco and $ARGUMENTS");
+    expect(r.warnings).toHaveLength(0);
+  });
+
+  it("keeps empty defaults and warns when a token has no value", () => {
+    const r = resolvePlaceholders("{{missing|fallback}}", {});
+    expect(r.content).toBe("fallback");
+    expect(r.warnings.length).toBeGreaterThan(0);
+  });
 });
 
 describe("selectAgentContent", () => {

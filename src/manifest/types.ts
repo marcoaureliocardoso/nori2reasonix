@@ -53,9 +53,23 @@ export interface NoriSkill {
   body: string;
   /** Absolute path of the source file. */
   path: string;
+  /** The `skills/<dir>` directory name this skill lives in ("" for single packages). */
+  dir: string;
   /** The skill's own nori.json, when present. */
   manifest: NoriManifest | null;
 }
+
+/** The `hooks:` block of a SUBAGENT.md, grouped by event name. */
+export type NormalizedSubagentHooks = Record<
+  string,
+  Array<{
+    matcher?: string;
+    command?: string;
+    args?: string[];
+    timeout?: number;
+    [key: string]: unknown;
+  }>
+>;
 
 /** A discovered subagent (a `subagents/<id>.md`, or a single-subagent package). */
 export interface NoriSubagent {
@@ -63,6 +77,14 @@ export interface NoriSubagent {
   frontmatter: Frontmatter;
   body: string;
   path: string;
+  /** Directory name the subagent lives in ("" for a flat .md file). */
+  dir: string;
+  /** Contents of the subagent's own nori.json, when present. */
+  json: NoriManifest | null;
+  /** `skills:` frontmatter list (preloaded skills), raw. */
+  skills: string[];
+  /** `hooks:` frontmatter block, normalized (see transform). */
+  hooks: NormalizedSubagentHooks;
 }
 
 /** A discovered slash command (`slashcommands/<command>.md`). */
@@ -78,6 +100,35 @@ export interface NoriMcpServer {
   /** Server name derived from the config file name. */
   name: string;
   config: JsonObject;
+  /** `${NAME}` placeholders found in the config (name → verbatim placeholder). */
+  env: Record<string, string>;
+}
+
+/** A colocated sidecar file belonging to a skill or the skillset root. */
+export interface SkillAsset {
+  /** Which skill owns this sidecar file ("" for skillset-root assets). */
+  skillName: string;
+  /** Parent dir inside the skill (e.g. "scripts", "templates"); "" = skill root. */
+  relParent: string;
+  /** Absolute source path. */
+  filePath: string;
+  /** Path relative to the owning skill dir (for path rewriting). */
+  relPath: string;
+}
+
+/** Skillset-root configuration that maps to Reasonix hooks/settings. */
+export interface ParsedRules {
+  hooks?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/** Result of local dependency-skill resolution (vendorized / stubbed / warned). */
+export interface ResolutionSummary {
+  vendorized: string[];
+  /** Absolute source SKILL.md path per vendorized name (best effort). */
+  vendorPaths: Record<string, string>;
+  stubbed: string[];
+  warnings: Array<{ entity: string; field: string; detail: string }>;
 }
 
 /** Best-effort discovery of the content of a skillset directory. */

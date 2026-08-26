@@ -1,0 +1,3 @@
+# Guard template
+
+Command: {{command}}

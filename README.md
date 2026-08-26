@@ -195,9 +195,11 @@ manifest → transform → template → emit-workspace / emit-plugin
 
 | Module | Responsibility |
 |--------|----------------|
-| `src/manifest/` | Nori source model + parser (`nori.json`, YAML frontmatter, content discovery) |
+| `src/manifest/` | Nori source model + parser (`nori.json`, YAML frontmatter, content discovery, subagent `SUBAGENT.md`+`nori.json`, Claude hooks block parsing) |
 | `src/transform/` | the single Nori→Reasonix mapping table (tool names from Reasonix's `TOOL_CONTRACT.md`) + warnings for unmapped fields |
-| `src/template/` | placeholder resolver (`$ARGUMENTS`, `$1..$9`) and explicit no-op agent-conditional (Nori has no inline conditional syntax) |
+| `src/template/` | placeholder resolver (`$ARGUMENTS`, `$1..$9`, `{{name}}`/`{{name|default}}`) and explicit no-op agent-conditional (Nori has no inline conditional syntax) |
+| `src/assets.ts` | colocated sidecar discovery (`references/`, `scripts/`, `templates/`, `examples/`) + copy planning |
+| `src/dependencies.ts` | local-only dependency-skill resolution (vendorize/stub/warn) + stub rendering |
 | `src/emit-workspace/` | pure planner + ownership-tracked writer for `.reasonix/…` |
 | `src/emit-plugin/` | pure planner + writer for `reasonix-plugin.json` / `.claude-plugin/plugin.json` |
 | `src/emit/ownership.ts` | shared ownership-tracked writer (sha256 manifest) |
@@ -247,6 +249,29 @@ The mapping in `src/transform/table.ts` and the plugin-manifest shape are
 derived from these sources, not from examples in the wild.
 
 ---
+
+## Fidelity report — senior-infra-ops-analyst
+
+The converter was validated against the real
+[`senior-infra-ops-analyst`](https://github.com/marcoaureliocardoso/senior-infra-ops-analyst)
+skillset (see `docs/fidelity-report.md` for the full snapshot):
+
+| Component | Result |
+|---|---|
+| skills | 25 → 25 slugged `SKILL.md` (1:1) |
+| subagents | 12 → 12 `runAs: subagent` profiles (1:1, with `max-iters`, `allowed-tools`, skill preload) |
+| commands | 20 → 20 (`$ARGUMENTS`/`{{name|default}}` resolved) |
+| hooks | 4 events → `.reasonix/settings.json` (`matcher`→`match` via `TOOL_NAME_MAP`, `{{skills_dir}}`→`.reasonix/skills`/`skills`, seconds→ms) |
+| sidecars | `references/`/`scripts/`/`templates/` copied next to each skill; body paths rewritten |
+| instructions | `AGENTS.md` → `REASONIX.md` |
+| dependencies | local Nori store → vendorized copy or stub + warning (never downloads) |
+
+Documented degradations (all warnings, none silent):
+
+- Nori `ask` guard action → **fail-closed deny** in Reasonix (no hook-level `ask`; see `docs/hook-semantics.md`).
+- `disallowedTools` → per-tool warnings (Reasonix has no negative allowlist).
+- `WebSearch`/`Task`/`Skill` tools → unmapped warnings (`web_search` is a provider-side tool, never remapped to `web_fetch`).
+- `model: inherit` → omitted (Reasonix subagent profiles inherit the executor model).
 
 ## Development
 

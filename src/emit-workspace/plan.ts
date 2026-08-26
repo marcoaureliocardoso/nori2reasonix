@@ -1,11 +1,40 @@
 import path from "node:path";
+import { readFileSync } from "node:fs";
 import type { TransformResult } from "../transform/map.js";
+import type { ReasonixSubagent } from "../transform/map.js";
+import type { SkillAsset } from "../manifest/types.js";
+import { slugify } from "../transform/table.js";
 
 export interface PlannedFile {
   /** Absolute destination path. */
   path: string;
   content: string;
-  kind: "skill" | "command" | "settings" | "mcp" | "instructions";
+  kind: "skill" | "command" | "settings" | "mcp" | "instructions" | "asset";
+}
+
+/** Render a subagent profile's frontmatter + preload-directive body. */
+export function renderSubagentFrontmatter(
+  agent: ReasonixSubagent
+): { frontmatter: Record<string, unknown>; body: string } {
+  const frontmatter: Record<string, unknown> = {
+    name: agent.name,
+    description: agent.description ?? agent.name,
+    runAs: "subagent",
+    "allowed-tools": agent.allowedTools,
+    "max-iters": agent.maxIters,
+  };
+  const preload =
+    agent.skillRefs.length === 0
+      ? ""
+      : "\n\n## Preloaded skills\n\nLoad each before acting (Reasonix has no frontmatter preload):\n\n" +
+        agent.skillRefs
+          .map(
+            (s) =>
+              `- Use run_skill with name "${s}" (arguments: the current task).`
+          )
+          .join("\n") +
+        "\n";
+  return { frontmatter, body: agent.body + preload };
 }
 
 /**
@@ -13,7 +42,8 @@ export interface PlannedFile {
  */
 export function planWorkspace(
   output: string,
-  result: TransformResult
+  result: TransformResult,
+  assets: SkillAsset[] = []
 ): PlannedFile[] {
   const plan: PlannedFile[] = [];
 
@@ -33,12 +63,7 @@ export function planWorkspace(
   }
 
   for (const agent of result.subagents) {
-    const frontmatter: Record<string, unknown> = {
-      name: agent.name,
-      description: agent.description ?? agent.name,
-      runAs: "subagent",
-      "allowed-tools": agent.allowedTools,
-    };
+    const { frontmatter, body } = renderSubagentFrontmatter(agent);
     plan.push({
       path: path.join(
         output,
@@ -47,7 +72,7 @@ export function planWorkspace(
         safeName(agent.name),
         "SKILL.md"
       ),
-      content: `${renderFrontmatter(frontmatter)}\n${agent.body}`,
+      content: `${renderFrontmatter(frontmatter)}\n${body}`,
       kind: "skill",
     });
   }
@@ -101,6 +126,28 @@ export function planWorkspace(
     });
   }
 
+  // Colocated sidecar assets: read at plan time (all skillset scripts are
+  // text) and copy next to the emitted skill directory.
+  for (const asset of assets) {
+    if (asset.skillName === "") continue; // skillset-root assets handled later
+    try {
+      const content = readFileSync(asset.filePath, "utf8");
+      plan.push({
+        path: path.join(
+          output,
+          ".reasonix",
+          "skills",
+          safeName(asset.skillName),
+          asset.relPath
+        ),
+        content,
+        kind: "asset",
+      });
+    } catch {
+      // Unreadable asset — skip silently at emit; caller inventory reports it.
+    }
+  }
+
   return plan;
 }
 
@@ -116,7 +163,8 @@ function renderFrontmatter(fm: Record<string, unknown>): string {
   return `---\n${lines.join("\n")}\n---`;
 }
 
-/** Reasonix names allow letters, digits, `-`, `_`, `.`. Keep them as-is. */
+/** Reasonix names allow letters, digits, `-`, `_`, `.`. Unified on `slugify`
+ * (strips leading dots; falls back to `skill` for empty/`.`/`..`). */
 function safeName(name: string): string {
-  return name.replace(/[^A-Za-z0-9._-]/g, "-");
+  return slugify(name);
 }

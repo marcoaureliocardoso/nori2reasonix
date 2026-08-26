@@ -50,4 +50,4 @@ Key verified facts (2026-08-25): skills discover at `<workspace>/{.reasonix,.age
 
 ## Notes
 
-- Scaffold created (2026-08-25): `package.json`, `tsconfig.json`, `bin/nori2reasonix` placeholder, `vitest.config.ts`, `test/`. `npm install` (0 vulnerabilities), `npm test`, `npm run build` all verified. The `--help`/`--input`/`--output`/`--target` flags and the six modules (`manifest`…`cli`) remain to be implemented.
+- Full conversion pipeline implemented: converter (`--input/--output/--target`), doctor, sync, clean. Subagent packages (`SUBAGENT.md`+`nori.json`), Claude subagent hooks, colocated sidecars, dependency vendorize/stub, and the fail-closed ask policy are implemented (see `docs/hook-semantics.md` and `docs/fidelity-report.md`).
