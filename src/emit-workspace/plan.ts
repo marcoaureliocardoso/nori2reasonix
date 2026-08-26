@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import type { TransformResult } from "../transform/map.js";
 import type { ReasonixSubagent } from "../transform/map.js";
 import type { SkillAsset } from "../manifest/types.js";
+import { slugify } from "../transform/table.js";
 
 export interface PlannedFile {
   /** Absolute destination path. */
@@ -162,7 +163,8 @@ function renderFrontmatter(fm: Record<string, unknown>): string {
   return `---\n${lines.join("\n")}\n---`;
 }
 
-/** Reasonix names allow letters, digits, `-`, `_`, `.`. Keep them as-is. */
+/** Reasonix names allow letters, digits, `-`, `_`, `.`. Unified on `slugify`
+ * (strips leading dots; falls back to `skill` for empty/`.`/`..`). */
 function safeName(name: string): string {
-  return name.replace(/[^A-Za-z0-9._-]/g, "-");
+  return slugify(name);
 }

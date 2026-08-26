@@ -204,14 +204,34 @@ export function parseHooksBlock(block: string): Record<string, unknown> {
   return out;
 }
 
-/** Parse a YAML flow list `[a, "b c"]` into a string array, or `[]`. */
+/** Parse a YAML flow list `[a, "b c"]` into a string array, or `[]`.
+ * Splits only on commas OUTSIDE quotes so `["a,b"]` stays one item. */
 function parseFlowList(value: string): string[] {
   const v = value.trim();
   if (v === "") return [];
   if (v.startsWith("[") && v.endsWith("]")) {
     const inner = v.slice(1, -1).trim();
     if (inner === "") return [];
-    return inner.split(",").map((s) => trimQuotes(s.trim()));
+
+    const items: string[] = [];
+    let current = "";
+    let quote: "'" | '"' | null = null;
+    for (const ch of inner) {
+      if ((ch === "'" || ch === '"') && quote === null) {
+        quote = ch;
+        current += ch;
+      } else if (ch === quote) {
+        quote = null;
+        current += ch;
+      } else if (ch === "," && quote === null) {
+        items.push(current.trim());
+        current = "";
+      } else {
+        current += ch;
+      }
+    }
+    if (current.trim() !== "") items.push(current.trim());
+    return items.map((s) => trimQuotes(s.trim()));
   }
   return [];
 }

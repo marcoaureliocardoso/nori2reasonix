@@ -24,7 +24,7 @@ nori2reasonix: wrote 141 file(s)
 - 37 directories under `.reasonix/skills/` (25 skills + 12 subagent profiles).
 - 20 commands under `.reasonix/commands/`.
 - `.reasonix/settings.json` has all four hook events; `PreToolUse[0]` is
-  `{ "match": "bash|Bash", "command": "./command-driven-operations/scripts/command-guard-launcher.sh pre", "timeout": 7 }`.
+  `{ "match": "bash|Bash", "command": ".reasonix/skills/command-driven-operations/scripts/command-guard-launcher.sh pre", "timeout": 7000 }`.
 - `REASONIX.md` emitted from the skillset's `AGENTS.md`.
 - Sidecars copied: `command-driven-operations/{scripts,templates,references}`,
   context-continuity scripts, and every skill's `templates/`.

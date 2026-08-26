@@ -224,10 +224,12 @@ function mapAgentMetadata(
 }
 
 function normalizeSkillRef(name: string): string {
-  return name
+  const stripped = name
     .replace(/^skills\//, "")
     .replace(/\/SKILL\.md$/, "")
     .replace(/\.md$/, "");
+  // Slug so it matches the slugified emitted dependency directory/name.
+  return slugify(stripped);
 }
 
 const SIDECAR_SEGS = ["references", "scripts", "templates", "examples"];

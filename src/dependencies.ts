@@ -87,9 +87,14 @@ export function resolveDependencies(
 
 /** Render a stub SKILL.md for a dependency that cannot be vendorized. */
 export function dependencyStubContent(name: string): string {
+  const slug = name
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/^\.+/, "")
+    .replace(/^-+|-+$/g, "");
+  const safe = slug === "" || slug === "." || slug === ".." ? "skill" : slug;
   return (
     "---\n" +
-    `name: ${name}\n` +
+    `name: ${safe}\n` +
     `description: Dependency stub — install the real "${name}" skill manually.\n` +
     "---\n\n" +
     "# (stub) This Nori dependency was not found in the local Nori store.\n"

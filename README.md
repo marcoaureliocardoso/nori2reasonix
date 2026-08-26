@@ -261,7 +261,7 @@ skillset (see `docs/fidelity-report.md` for the full snapshot):
 | skills | 25 → 25 slugged `SKILL.md` (1:1) |
 | subagents | 12 → 12 `runAs: subagent` profiles (1:1, with `max-iters`, `allowed-tools`, skill preload) |
 | commands | 20 → 20 (`$ARGUMENTS`/`{{name|default}}` resolved) |
-| hooks | 4 events → `.reasonix/settings.json` (`matcher`→`match`, `{{skills_dir}}`→`.`, timeout preserved) |
+| hooks | 4 events → `.reasonix/settings.json` (`matcher`→`match` via `TOOL_NAME_MAP`, `{{skills_dir}}`→`.reasonix/skills`/`skills`, seconds→ms) |
 | sidecars | `references/`/`scripts/`/`templates/` copied next to each skill; body paths rewritten |
 | instructions | `AGENTS.md` → `REASONIX.md` |
 | dependencies | local Nori store → vendorized copy or stub + warning (never downloads) |

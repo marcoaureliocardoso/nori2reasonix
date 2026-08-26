@@ -21,9 +21,12 @@ purpose). Emitting exit 2 keeps the invariant "no unapproved destructive call".
 
 ## What the converter emits
 
-- `matcher` → `match` (anchored; tool names lowercased, `Bash`→`bash|Bash`).
-- `{type:"command", command, args[]}` → one `command` string.
-- `{{skill_dir}}` / `{{skills_dir}}` → relative paths valid at the emit root.
-- `timeout` (ms) preserved; default 5000 ms for gating events, 30000 ms for all others.
+- `matcher` → `match` (anchored via `TOOL_NAME_MAP`; `Bash`→`bash|Bash`,
+  `Write`→`write_file|Write`, …).
+- `{type:"command", command, args[]}` → one `command` string (args shell-quoted).
+- `{{skill_dir}}` / `{{skills_dir}}` → the target's emitted skills root
+  (`.reasonix/skills` for workspace, `skills` for plugin).
+- `timeout` (Nori/Claude **seconds**) converted to Reasonix **milliseconds**;
+  default 5000 ms for gating events, 30000 ms for all others.
 - Unmapped hook fields (`permissionDecision`, `updatedInput`,
   `hookSpecificOutput`) are warnings, never silent drops.

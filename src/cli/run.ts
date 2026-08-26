@@ -7,6 +7,7 @@ import { writePlugin } from "../emit-plugin/writer.js";
 import { listSkillAssets } from "../assets.js";
 import { nodeFs } from "../manifest/discovery.js";
 import { resolveDependencies, dependencyStubContent } from "../dependencies.js";
+import { slugify } from "../transform/table.js";
 import { NoriError } from "../manifest/errors.js";
 import type { CliOptions, Target } from "./args.js";
 import type { ResolutionSummary } from "../manifest/types.js";
@@ -61,22 +62,33 @@ export function runCli(options: CliOptions): CliResult {
 
   const written: string[] = [];
   const skipped: string[] = [];
-  const allWarnings: TransformWarning[] = [];
+  const warningSet = new Map<string, TransformWarning>();
+  const addWarning = (warning: TransformWarning): void => {
+    // Deduplicate by entity+field+detail so `--target both` does not report
+    // each transform warning twice (workspace + plugin transforms).
+    const key = `${warning.entity}\u0000${warning.field}\u0000${warning.detail}`;
+    if (!warningSet.has(key)) warningSet.set(key, warning);
+  };
 
   // Dependency-silent-drop guard: resolution warnings (store unreachable /
   // missing dependency) must surface, never be dropped.
   for (const warning of resolution.warnings) {
-    allWarnings.push({
+    addWarning({
       entity: warning.entity,
       field: warning.field,
       detail: warning.detail,
     });
   }
 
+  // Keep the workspace result (when produced) for the inventory — its counts
+  // are target-independent, so no third transform is needed.
+  let inventoryResult: TransformResult | null = null;
+
   if (options.target === "workspace" || options.target === "both") {
     // Reasonix workspace skills live under `<root>/.reasonix/skills`.
     const result = transform(parsed, { skillsRoot: ".reasonix/skills" });
-    allWarnings.push(...result.warnings);
+    for (const warning of result.warnings) addWarning(warning);
+    inventoryResult = result;
 
     const wsPlan = planWorkspace(options.output, result, assets);
     // Append vendorized dependency copies AND stubs (the workspace target must
@@ -91,7 +103,9 @@ export function runCli(options: CliOptions): CliResult {
   if (options.target === "plugin" || options.target === "both") {
     // Reasonix plugin skills live under `<plugin-root>/skills`.
     const result = transform(parsed, { skillsRoot: "skills" });
-    allWarnings.push(...result.warnings);
+    for (const warning of result.warnings) addWarning(warning);
+    // For plugin-only runs the plugin result is the inventory source.
+    if (inventoryResult === null) inventoryResult = result;
 
     const pluginPlan = planPlugin(options.output, result, resolution, assets);
     const vendorPlan = planVendoredSkills(options.output, resolution, ".");
@@ -100,20 +114,13 @@ export function runCli(options: CliOptions): CliResult {
     skipped.push(...pluginWrite.skipped);
   }
 
-  // The inventory reflects the last transform's shape (identical counts for
-  // both targets); warnings are the union of both transforms' warnings.
-  const lastResult = transform(
-    parsed,
-    options.target === "plugin" ? { skillsRoot: "skills" } : { skillsRoot: ".reasonix/skills" }
-  );
-
   return {
     exitCode: 0,
     summary: {
       written,
       skipped,
-      warnings: allWarnings,
-      inventory: renderInventory(lastResult),
+      warnings: [...warningSet.values()],
+      inventory: renderInventory(inventoryResult ?? transform(parsed)),
     },
   };
 }
@@ -201,9 +208,10 @@ function planDependencyStubs(
   return plan;
 }
 
-/** Reasonix names allow letters, digits, `-`, `_`, `.`; reject path escapes. */
+/** Reasonix names allow letters, digits, `-`, `_`, `.`; unified on `slugify`
+ * (which strips leading dots and falls back to `skill` for empty/`.`/`..`). */
 function safeName(name: string): string {
-  return name.replace(/[^A-Za-z0-9._-]/g, "-").replace(/^\.+/, "");
+  return slugify(name);
 }
 
 

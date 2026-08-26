@@ -4,6 +4,7 @@ import type { TransformResult } from "../transform/map.js";
 import { renderSubagentFrontmatter } from "../emit-workspace/plan.js";
 import type { ResolutionSummary, SkillAsset } from "../manifest/types.js";
 import { dependencyStubContent } from "../dependencies.js";
+import { slugify } from "../transform/table.js";
 
 export interface PlannedFile {
   path: string;
@@ -167,5 +168,5 @@ function renderFrontmatter(fm: Record<string, unknown>): string {
 }
 
 function safeName(name: string): string {
-  return name.replace(/[^A-Za-z0-9._-]/g, "-");
+  return slugify(name);
 }
