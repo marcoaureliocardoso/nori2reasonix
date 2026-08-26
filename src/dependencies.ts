@@ -2,6 +2,7 @@ import path from "node:path";
 import type { FileSystem } from "./manifest/discovery.js";
 import type { ParsedNoriInput } from "./manifest/parser.js";
 import type { ResolutionSummary } from "./manifest/types.js";
+import { slugify } from "./transform/table.js";
 
 export type Executor = (command: string, args: string[]) => string;
 
@@ -87,11 +88,17 @@ export function resolveDependencies(
 
 /** Render a stub SKILL.md for a dependency that cannot be vendorized. */
 export function dependencyStubContent(name: string): string {
-  const slug = name
-    .replace(/[^A-Za-z0-9._-]+/g, "-")
-    .replace(/^\.+/, "")
-    .replace(/^-+|-+$/g, "");
-  const safe = slug === "" || slug === "." || slug === ".." ? "skill" : slug;
+  // Reuse the shared sanitizer so the stub's frontmatter `name:` always equals
+  // its emitted directory name (planDependencyStubs uses slugify too), even
+  // for dependency names exceeding 64 chars or consisting of only dots.
+  let safe: string;
+  try {
+    safe = slugify(name);
+  } catch {
+    // slugify is local and pure; this branch exists only for defensive
+    // isolation if its import surface ever changes.
+    safe = "skill";
+  }
   return (
     "---\n" +
     `name: ${safe}\n` +

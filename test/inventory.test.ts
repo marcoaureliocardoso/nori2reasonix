@@ -7,7 +7,7 @@ import { readFixture } from "./helpers.ts";
 describe("renderInventory", () => {
   it("summarizes skills, subagents, commands, hooks and warnings", () => {
     const result = transform(parseNoriInput(readFixture("skillset")));
-    const text = renderInventory(result);
+    const text = renderInventory(result, result.warnings.length);
     expect(text).toContain("subagents:");
     expect(text).toContain("commands:");
     expect(text).toContain("warnings:");

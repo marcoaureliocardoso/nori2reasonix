@@ -120,7 +120,10 @@ export function runCli(options: CliOptions): CliResult {
       written,
       skipped,
       warnings: [...warningSet.values()],
-      inventory: renderInventory(inventoryResult ?? transform(parsed)),
+      inventory: renderInventory(
+        inventoryResult ?? transform(parsed),
+        warningSet.size
+      ),
     },
   };
 }
@@ -141,8 +144,12 @@ function inputError(error: unknown): CliResult {
   };
 }
 
-/** Render a fixed human-readable conversion inventory (no silent drops). */
-export function renderInventory(result: TransformResult): string {
+/** Render a fixed human-readable conversion inventory. `warningCount` is the
+ * deduped union actually reported to the caller (transform + resolution). */
+export function renderInventory(
+  result: TransformResult,
+  warningCount: number
+): string {
   const eventCount = Object.keys(result.hooks).length;
   const renamed = result.skills.filter(
     (s) => s.frontmatter.name !== s.name
@@ -152,7 +159,7 @@ export function renderInventory(result: TransformResult): string {
     `subagents:  ${result.subagents.length} (runAs: subagent)`,
     `commands:   ${result.commands.length}`,
     `hooks:      ${eventCount} events (${Object.keys(result.hooks).join(", ") || "none"})`,
-    `warnings:   ${result.warnings.length} (see below — none are silent drops)`,
+    `warnings:   ${warningCount} (see below — none are silent drops)`,
   ].join("\n");
 }
 /** Build PlannedFile entries that copy vendorized dependency SKILL.md files. */
