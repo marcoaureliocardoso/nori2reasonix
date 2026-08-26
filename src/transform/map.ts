@@ -65,12 +65,25 @@ export interface TransformResult {
   warnings: TransformWarning[];
 }
 
+export interface TransformOptions {
+  /**
+   * Where emitted skills live relative to the emit root, used to resolve
+   * `{{skills_dir}}` in hook commands. Workspace target uses
+   * `.reasonix/skills`; plugin target uses `skills`.
+   */
+  skillsRoot?: string;
+}
+
 /**
  * Translate a parsed Nori input into the Reasonix-native model.
  * Pure and deterministic: no file IO, no CLI concerns.
  */
-export function transform(input: ParsedNoriInput): TransformResult {
+export function transform(
+  input: ParsedNoriInput,
+  options: TransformOptions = {}
+): TransformResult {
   const warnings: TransformWarning[] = [];
+  const skillsRoot = options.skillsRoot ?? "skills";
 
   const skills: ReasonixSkill[] = input.skills.map((skill) => {
     const title = String(skill.frontmatter.name ?? skill.name);
@@ -112,7 +125,7 @@ export function transform(input: ParsedNoriInput): TransformResult {
     mapCommand(cmd, warnings)
   );
 
-  const hooks: ReasonixHooks = mapHooks(subagents, warnings);
+  const hooks: ReasonixHooks = mapHooks(subagents, warnings, skillsRoot);
 
   return {
     name: input.name,
@@ -265,7 +278,8 @@ function mapCommand(
 
 function mapHooks(
   agents: ReasonixSubagent[],
-  warnings: TransformWarning[]
+  warnings: TransformWarning[],
+  skillsRoot: string
 ): ReasonixHooks {
   const events = new Map<string, unknown[]>();
 
@@ -304,12 +318,16 @@ function mapHooks(
 
           const cmdStr = cmd["command"];
           if (typeof cmdStr === "string") {
-            const resolved = resolveHookTemplate(cmdStr, agent.name);
+            const resolved = resolveHookTemplate(cmdStr, agent.name, skillsRoot);
             const args = Array.isArray(cmd["args"])
               ? cmd["args"].map(String)
               : [];
+            // Shell-quote each argument so spaces/metacharacters cannot break
+            // or inject; join into a single `sh -c` command string (Reasonix
+            // runs hook `command` through the platform shell).
+            const quotedArgs = args.map(quoteShellArg).join(" ");
             mapped["command"] =
-              args.length > 0 ? `${resolved} ${args.join(" ")}` : resolved;
+              quotedArgs !== "" ? `${resolved} ${quotedArgs}` : resolved;
           } else {
             warnings.push({
               entity: agent.name,
@@ -319,15 +337,21 @@ function mapHooks(
             continue;
           }
 
+          // Nori/Claude hook timeouts are expressed in SECONDS (the reference
+          // SUBAGENT.md values 7/5 are seconds); Reasonix `timeout` is ms.
+          const rawTimeout = cmd["timeout"];
+          const seconds =
+            typeof rawTimeout === "number"
+              ? rawTimeout
+              : typeof rawTimeout === "string" && /^\d+$/.test(String(rawTimeout))
+                ? parseInt(String(rawTimeout), 10)
+                : undefined;
           mapped["timeout"] =
-            typeof cmd["timeout"] === "number"
-              ? cmd["timeout"]
-              : typeof cmd["timeout"] === "string" &&
-                  /^\d+$/.test(String(cmd["timeout"]))
-                ? parseInt(String(cmd["timeout"]), 10)
-                : eventName === "PreToolUse" || eventName === "UserPromptSubmit"
-                  ? 5000
-                  : 30000;
+            seconds !== undefined
+              ? seconds * 1000
+              : eventName === "PreToolUse" || eventName === "UserPromptSubmit"
+                ? 5000
+                : 30000;
 
           events.set(eventName, [...(events.get(eventName) ?? []), mapped]);
         }
@@ -336,12 +360,11 @@ function mapHooks(
   }
 
   // Warn once per unmapped hook field category so a single hook cannot flood.
+  // Scan only the field NAMES, not serialized values, so a command/arg that
+  // literally contains a field name cannot false-positive.
   for (const agent of agents) {
     for (const field of HOOK_UNMAPPED_FIELDS) {
-      const found =
-        typeof agent.roleHooks === "object" && agent.roleHooks !== null
-          ? JSON.stringify(agent.roleHooks).includes(`"${field}"`)
-          : false;
+      const found = roleHooksHasField(agent.roleHooks, field);
       if (found) {
         warnings.push({
           entity: agent.name,
@@ -358,12 +381,37 @@ function mapHooks(
   return out;
 }
 
-/** `{{skills_dir}}` points at the skillset skills/ root; after conversion the
- * command is written relative to the emit root, so collapse it to `.`. */
-function resolveHookTemplate(command: string, skillDir: string): string {
+/** True when any hook object carries `field` as an object KEY (not a value). */
+function roleHooksHasField(roleHooks: Record<string, unknown>, field: string): boolean {
+  const stack: unknown[] = [roleHooks];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (current === null || typeof current !== "object") continue;
+    for (const [key, value] of Object.entries(current as Record<string, unknown>)) {
+      if (key === field) return true;
+      stack.push(value);
+    }
+  }
+  return false;
+}
+
+/** Shell-quote a single hook argument (single quotes, POSIX-safe). */
+function quoteShellArg(arg: string): string {
+  if (arg === "") return "''";
+  if (/^[A-Za-z0-9_./:=+\-]+$/.test(arg)) return arg;
+  return `'${arg.replace(/'/g, `'\\''`)}'`;
+}
+
+/** `{{skills_dir}}` points at the skillset skills/ root; resolve it to where
+ * this target actually emits skills. `{{skill_dir}}` is the owning skill dir. */
+function resolveHookTemplate(
+  command: string,
+  skillDir: string,
+  skillsRoot: string
+): string {
   let out = command;
   out = out.replace(/\{\{\s*skill_dir\s*\}\}/g, skillDir);
-  out = out.replace(/\{\{\s*skills_dir\s*\}\}/g, ".");
+  out = out.replace(/\{\{\s*skills_dir\s*\}\}/g, skillsRoot);
   return out;
 }
 
@@ -394,14 +442,19 @@ function mapEventName(name: string): string {
 }
 
 /** Reasonix `match` is an anchored regex; Nori matchers like "Bash" are tool
- * names, so mirror the lowercase builtin form too. */
+ * names, so map through TOOL_NAME_MAP and add the PascalCase original as an
+ * alternative pattern so both spellings match. */
 function anchorToolPattern(pattern: string): string {
   if (pattern === "" || pattern === "*") return "*";
   return pattern
     .split("|")
     .map((p) => {
       const t = p.trim();
-      return t === "Bash" ? "bash|Bash" : t;
+      if (t === "*") return ".*";
+      const mapped = TOOL_NAME_MAP[t];
+      if (mapped === undefined) return t;
+      // Match the lowercase Reasonix name AND the Nori PascalCase original.
+      return t === mapped ? t : `${mapped}|${t}`;
     })
     .join("|")
     .replace(/\*/g, ".*");

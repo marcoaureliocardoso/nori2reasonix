@@ -115,7 +115,20 @@ describe("transform", () => {
     expect(pre?.[0]?.match).toBe("bash|Bash");
     expect(String(pre?.[0]?.command)).toContain("command-guard-launcher.sh");
     expect(String(pre?.[0]?.command)).not.toContain("{{skills_dir}}");
-    expect(pre?.[0]?.timeout).toBe(7);
+    // Default skillsRoot is "skills" (plugin layout).
+    expect(String(pre?.[0]?.command)).toContain("skills/");
+    // Nori timeouts are seconds; Reasonix `timeout` is milliseconds.
+    expect(pre?.[0]?.timeout).toBe(7000);
+  });
+
+  it("resolves {{skills_dir}} against the workspace skillsRoot option", () => {
+    const input = parseNoriInput(readFixture("skillset"));
+    const result = transform(input, { skillsRoot: ".reasonix/skills" });
+    const hooks = result.hooks as Record<string, unknown[]>;
+    const pre = hooks["PreToolUse"] as Array<Record<string, unknown>>;
+    expect(String(pre?.[0]?.command)).toContain(
+      ".reasonix/skills/command-driven-operations"
+    );
   });
 
   it("slugs skill names and preserves the original title as description", () => {

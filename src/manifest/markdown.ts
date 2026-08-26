@@ -139,7 +139,9 @@ export function parseHooksBlock(block: string): Record<string, unknown> {
         const key = m[1] ?? "";
         const val = trimQuotes(m[2] ?? "");
         if (key === "hooks") {
-          entry = entry ?? {};
+          // A matcher-less `- hooks:` starts a NEW entry; never reuse the
+          // previous (matcher) entry or the two share one hooks array.
+          entry = {};
           entry["hooks"] = [];
           (out[event] as unknown[]).push(entry);
           cmd = null;
@@ -175,7 +177,9 @@ export function parseHooksBlock(block: string): Record<string, unknown> {
       entry["hooks"] = entry["hooks"] ?? [];
       (entry["hooks"] as unknown[]).push(cmd);
       if (key === "args") {
-        cmd["args"] = [];
+        // Flow-style `args: [a, b]` (or `- args: [a, b]`) — parse the inline
+        // list; block-style `args:` + `- item` lines are appended afterwards.
+        cmd["args"] = parseFlowList(val);
       } else {
         cmd[key] = val;
       }
@@ -189,7 +193,7 @@ export function parseHooksBlock(block: string): Record<string, unknown> {
       const key = m[1] ?? "";
       const val = trimQuotes(m[2] ?? "");
       if (key === "args") {
-        cmd["args"] = [];
+        cmd["args"] = parseFlowList(val);
       } else {
         cmd[key] = val;
       }
@@ -198,6 +202,18 @@ export function parseHooksBlock(block: string): Record<string, unknown> {
   }
 
   return out;
+}
+
+/** Parse a YAML flow list `[a, "b c"]` into a string array, or `[]`. */
+function parseFlowList(value: string): string[] {
+  const v = value.trim();
+  if (v === "") return [];
+  if (v.startsWith("[") && v.endsWith("]")) {
+    const inner = v.slice(1, -1).trim();
+    if (inner === "") return [];
+    return inner.split(",").map((s) => trimQuotes(s.trim()));
+  }
+  return [];
 }
 
 function trimQuotes(value: string): string {

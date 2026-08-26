@@ -37,15 +37,18 @@ export const UNMAPPED_TOOLS: Readonly<Record<string, string>> = {
 /**
  * Normalize a Nori skill/command name to a Reasonix `[A-Za-z0-9._-]{1,64}`
  * slug. Spaces/others become `-`; the human title should already have been
- * moved to `description` by the caller.
+ * moved to `description` by the caller. Leading dots (`.`, `..`) are stripped
+ * so a hostile name cannot escape the emitted skills directory.
  */
 export function slugify(name: string): string {
-  const slug = name
+  let slug = name
     .trim()
     .replace(/[^A-Za-z0-9._-]+/g, "-")
     .replace(/^-+|-+$/g, "")
+    .replace(/^\.+/, "")
     .slice(0, 64);
-  return slug || "skill";
+  if (slug === "" || slug === "." || slug === "..") slug = "skill";
+  return slug;
 }
 
 /**

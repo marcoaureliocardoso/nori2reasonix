@@ -26,7 +26,12 @@ describe("runCli", () => {
     expect(result.exitCode).toBe(0);
     expect(existsSync(path.join(out, ".reasonix", "skills", "brainstorming", "SKILL.md"))).toBe(true);
     expect(result.summary.written.length).toBeGreaterThan(0);
-    expect(result.summary.warnings.length).toBe(0);
+    // The fixture declares two dependency skills that are not in a local Nori
+    // store; those surfaces as warnings (not silent drops) now.
+    expect(result.summary.warnings.length).toBeGreaterThan(0);
+    expect(
+      result.summary.warnings.every((w) => w.field === "dependencies.skills")
+    ).toBe(true);
   });
 
   it("emits a plugin package for target=plugin", () => {

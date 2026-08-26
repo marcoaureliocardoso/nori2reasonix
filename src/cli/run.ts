@@ -6,7 +6,7 @@ import { planPlugin } from "../emit-plugin/plan.js";
 import { writePlugin } from "../emit-plugin/writer.js";
 import { listSkillAssets } from "../assets.js";
 import { nodeFs } from "../manifest/discovery.js";
-import { resolveDependencies } from "../dependencies.js";
+import { resolveDependencies, dependencyStubContent } from "../dependencies.js";
 import { NoriError } from "../manifest/errors.js";
 import type { CliOptions, Target } from "./args.js";
 import type { ResolutionSummary } from "../manifest/types.js";
@@ -56,34 +56,65 @@ export function runCli(options: CliOptions): CliResult {
     return inputError(error);
   }
 
-  const result = transform(parsed);
   const assets = listSkillAssets(options.input, nodeFs, parsed.skills);
   const resolution = resolveDependencies(parsed, defaultExec, nodeFs);
 
   const written: string[] = [];
   const skipped: string[] = [];
+  const allWarnings: TransformWarning[] = [];
+
+  // Dependency-silent-drop guard: resolution warnings (store unreachable /
+  // missing dependency) must surface, never be dropped.
+  for (const warning of resolution.warnings) {
+    allWarnings.push({
+      entity: warning.entity,
+      field: warning.field,
+      detail: warning.detail,
+    });
+  }
 
   if (options.target === "workspace" || options.target === "both") {
+    // Reasonix workspace skills live under `<root>/.reasonix/skills`.
+    const result = transform(parsed, { skillsRoot: ".reasonix/skills" });
+    allWarnings.push(...result.warnings);
+
     const wsPlan = planWorkspace(options.output, result, assets);
-    // Append vendorized dependency SKILL.md copies to the workspace plan.
+    // Append vendorized dependency copies AND stubs (the workspace target must
+    // not leave `skillRefs` dangling any more than the plugin target does).
     const vendorPlan = planVendoredSkills(options.output, resolution, ".reasonix");
-    const wsWrite = writeWorkspace([...wsPlan, ...vendorPlan]);
+    const stubPlan = planDependencyStubs(options.output, resolution, ".reasonix");
+    const wsWrite = writeWorkspace([...wsPlan, ...vendorPlan, ...stubPlan]);
     written.push(...wsWrite.written);
     skipped.push(...wsWrite.skipped);
   }
 
   if (options.target === "plugin" || options.target === "both") {
+    // Reasonix plugin skills live under `<plugin-root>/skills`.
+    const result = transform(parsed, { skillsRoot: "skills" });
+    allWarnings.push(...result.warnings);
+
     const pluginPlan = planPlugin(options.output, result, resolution, assets);
-    // Plugin target already emits stubs; append vendorized copies too.
     const vendorPlan = planVendoredSkills(options.output, resolution, ".");
     const pluginWrite = writePlugin([...pluginPlan, ...vendorPlan]);
     written.push(...pluginWrite.written);
     skipped.push(...pluginWrite.skipped);
   }
 
+  // The inventory reflects the last transform's shape (identical counts for
+  // both targets); warnings are the union of both transforms' warnings.
+  const lastResult = transform(
+    parsed,
+    options.target === "plugin" ? { skillsRoot: "skills" } : { skillsRoot: ".reasonix/skills" }
+  );
+
   return {
     exitCode: 0,
-    summary: { written, skipped, warnings: result.warnings, inventory: renderInventory(result) },
+    summary: {
+      written,
+      skipped,
+      warnings: allWarnings,
+      inventory: renderInventory(lastResult),
+    },
   };
 }
 
@@ -133,10 +164,12 @@ function planVendoredSkills(
     } catch {
       continue;
     }
+    // safeName so a hostile dependency name cannot escape the skills dir.
+    const safe = safeName(name);
     const skillRoot =
       rootDir === ".reasonix"
-        ? path.join(output, ".reasonix", "skills", name)
-        : path.join(output, "skills", name);
+        ? path.join(output, ".reasonix", "skills", safe)
+        : path.join(output, "skills", safe);
     plan.push({
       path: path.join(skillRoot, "SKILL.md"),
       content,
@@ -144,6 +177,33 @@ function planVendoredSkills(
     });
   }
   return plan;
+}
+
+/** Build stub SKILL.md entries for dependencies that could not be vendorized. */
+function planDependencyStubs(
+  output: string,
+  resolution: ResolutionSummary,
+  rootDir: string
+): Array<{ path: string; content: string; kind: "skill" }> {
+  const plan: Array<{ path: string; content: string; kind: "skill" }> = [];
+  for (const name of resolution.stubbed) {
+    const safe = safeName(name);
+    const skillRoot =
+      rootDir === ".reasonix"
+        ? path.join(output, ".reasonix", "skills", safe)
+        : path.join(output, "skills", safe);
+    plan.push({
+      path: path.join(skillRoot, "SKILL.md"),
+      content: dependencyStubContent(name),
+      kind: "skill",
+    });
+  }
+  return plan;
+}
+
+/** Reasonix names allow letters, digits, `-`, `_`, `.`; reject path escapes. */
+function safeName(name: string): string {
+  return name.replace(/[^A-Za-z0-9._-]/g, "-").replace(/^\.+/, "");
 }
 
 
